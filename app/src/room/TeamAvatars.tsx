@@ -17,7 +17,7 @@ import { CURSOR_IDLE_MS, myPointer } from './teamSync';
 const DOCK_Z = 2;
 const POINT_Z = HOLD_Z + 0.25;
 /** Height of a pointing avatar in world units (a block is 0.5 tall). */
-const POINT_H = 0.95;
+const POINT_H = 0.76;
 /** One idle cycle: mostly bobbing, a shiver, and one full turn. */
 const CYCLE_S = 9;
 
@@ -83,7 +83,7 @@ function Actor({ uid, member, isMe, slot }: { uid: string; member: Member; isMe:
     if (pointing && pointAt(cam, fx, fy, POINT_Z, hit)) {
       height = POINT_H;
       // Feet just above the pointer: the carried block sits under the avatar and stays readable.
-      hit.y += 0.3 + (still ? 0 : Math.sin(t * 5) * 0.02);
+      hit.y += 0.28 + (still ? 0 : Math.sin(t * 5) * 0.02);
       lean = carrying ? 0.28 : 0.08;
       roll = carrying && !still ? Math.sin(t * 9) * 0.05 : 0;
       follow = isMe ? 30 : 12;
@@ -91,7 +91,7 @@ function Actor({ uid, member, isMe, slot }: { uid: string; member: Member; isMe:
       // Resting corner, laid out in screen pixels: this player on top, teammates in a row below.
       const corner = buddyCornerPx(W);
       const small = W <= 640;
-      const sizePx = isMe ? (small ? 62 : 104) : small ? 32 : 50;
+      const sizePx = isMe ? (small ? 50 : 83) : small ? 26 : 40;
       const px = isMe ? W - corner.w / 2 : W - corner.w + ((slot - 0.5) * corner.w) / 3;
       const py = isMe ? (small ? 14 : 20) + sizePx : (small ? 100 : 150) + sizePx;
       pointAt(cam, px / W, py / H, DOCK_Z, hit);
