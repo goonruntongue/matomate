@@ -1,5 +1,5 @@
 // The team's avatars as 3D models inside the stage (drawn by the game's own canvas).
-// A member pointing at the stage: the avatar stands just above that spot and carries the block they hold.
+// A member pointing at the stage: the avatar stands just above that spot; holding a block, it steps behind it.
 // Otherwise it rests in the top-right corner the board keeps clear (this player's own, larger, first),
 // bobbing, and now and then shivering or spinning round.
 import { Html, useGLTF } from '@react-three/drei';
@@ -13,9 +13,11 @@ import { avatarUrl, normalized } from './avatars';
 import { useSession, type Member } from './session';
 import { CURSOR_IDLE_MS, myPointer } from './teamSync';
 
-/** Depth of the resting corner, and of a pointing avatar (just in front of the block it carries). */
+/** Depth of the resting corner, and of a pointing avatar (in front of the blocks at rest). */
 const DOCK_Z = 2;
 const POINT_Z = HOLD_Z + 0.25;
+/** While it holds a block the avatar steps behind it (a held block is on the plane z = HOLD_Z). */
+const CARRY_Z = HOLD_Z - 0.45;
 /** Height of a pointing avatar in world units (a block is 0.5 tall). */
 const POINT_H = 0.76;
 /** One idle cycle: mostly bobbing, a shiver, and one full turn. */
@@ -77,17 +79,15 @@ function Actor({ uid, member, isMe, slot }: { uid: string; member: Member; isMe:
 
     let height: number;
     let yaw = 0;
-    let spinning = false;
     let lean = 0;
     let roll = 0;
     let follow: number;
-    if (pointing && pointAt(cam, fx, fy, POINT_Z, hit)) {
+    if (pointing && pointAt(cam, fx, fy, carrying ? CARRY_Z : POINT_Z, hit)) {
       height = POINT_H;
-      // Feet just above the pointer: the carried block sits under the avatar and stays readable.
-      hit.y += 0.28 + (still ? 0 : Math.sin(t * 5) * 0.02);
-      // Holding a block: turn round to face it (back to the camera) and lean into it, like carrying it.
-      yaw = carrying ? Math.PI : 0;
-      lean = carrying ? -0.28 : 0.08;
+      // Pointing: feet just above the spot. Holding a block: the avatar stands behind it and tips
+      // towards the camera, so the block is in front, held up against its body.
+      hit.y += (carrying ? 0.06 : 0.28) + (still ? 0 : Math.sin(t * 5) * 0.02);
+      lean = carrying ? 0.32 : 0.08;
       roll = carrying && !still ? Math.sin(t * 9) * 0.05 : 0;
       follow = isMe ? 30 : 12;
     } else {
@@ -107,7 +107,6 @@ function Actor({ uid, member, isMe, slot }: { uid: string; member: Member; isMe:
         if (c > 6 && c < 7) {
           const u = c - 6;
           yaw = (u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2) * Math.PI * 2; // one full turn
-          spinning = true;
         }
       }
       follow = 6;
@@ -120,9 +119,7 @@ function Actor({ uid, member, isMe, slot }: { uid: string; member: Member; isMe:
     }
     g.position.lerp(hit, ease(follow));
     g.scale.setScalar(THREE.MathUtils.lerp(g.scale.x, height, ease(10)));
-    // The idle spin follows its own curve; every other turn (to the block and back) is eased.
-    const from = inner.rotation.y > Math.PI * 1.5 ? inner.rotation.y - Math.PI * 2 : inner.rotation.y;
-    inner.rotation.set(THREE.MathUtils.lerp(inner.rotation.x, lean, ease(10)), spinning ? yaw : THREE.MathUtils.lerp(from, yaw, ease(12)), roll);
+    inner.rotation.set(THREE.MathUtils.lerp(inner.rotation.x, lean, ease(10)), yaw, roll);
     // This player's own avatar needs no name while it is the pointer.
     if (label.current) label.current.style.display = isMe && pointing ? 'none' : '';
   });
