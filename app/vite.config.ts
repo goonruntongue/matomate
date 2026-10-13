@@ -53,7 +53,7 @@ function avatarThumbs(): Plugin {
     configureServer(server) {
       server.middlewares.use('/__thumbs', (req, res) => {
         const name = (req.url ?? '').slice(1);
-        if (req.method !== 'POST' || !/^avatar\d{1,2}\.webp$/.test(name)) {
+        if (req.method !== 'POST' || !/^(icon-)?avatar\d{1,2}\.webp$/.test(name)) {
           res.statusCode = 400;
           res.end();
           return;
@@ -61,8 +61,10 @@ function avatarThumbs(): Plugin {
         const chunks: Buffer[] = [];
         req.on('data', (c: Buffer) => chunks.push(c));
         req.on('end', () => {
-          mkdirSync('public/avatars/thumbs', { recursive: true });
-          writeFileSync(join('public/avatars/thumbs', name), Buffer.concat(chunks));
+          // Icon art is a source for scripts/make-icons.mjs, not something the app serves.
+          const dir = name.startsWith('icon-') ? 'icons/dx' : 'public/avatars/thumbs';
+          mkdirSync(dir, { recursive: true });
+          writeFileSync(join(dir, name), Buffer.concat(chunks));
           res.end('ok');
         });
       });

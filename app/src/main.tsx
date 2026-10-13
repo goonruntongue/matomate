@@ -9,8 +9,10 @@ const root = createRoot(document.getElementById('root')!);
 if (import.meta.env.DEV && new URLSearchParams(location.search).has('make-thumbs')) {
   // Dev tool: (re)make the avatar pictures. See src/room/thumbs.ts.
   const lines: string[] = [];
-  void import('./room/thumbs').then(({ makeThumbs }) =>
-    makeThumbs((line) => {
+  // ?make-thumbs=icon draws the art for the DX app icon instead.
+  const icon = new URLSearchParams(location.search).get('make-thumbs') === 'icon';
+  void import('./room/thumbs').then(({ makeThumbs, makeIconArt }) =>
+    (icon ? makeIconArt : makeThumbs)((line) => {
       lines.push(line);
       root.render(<pre style={{ padding: 16 }}>{lines.join('\n')}</pre>);
     }),

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Mato mate DX app icon, top layer: the "DX" badge, kept inside the maskable safe zone. -->
+  <defs>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000814" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+  <g filter="url(#soft)">
+    <rect x="596" y="118" width="300" height="150" rx="75" fill="#ffd54a" stroke="#ffffff" stroke-width="10"/>
+    <text x="746" y="232" text-anchor="middle" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="112" fill="#1a2140">DX</text>
+  </g>
+</svg>

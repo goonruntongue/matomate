@@ -13,6 +13,7 @@
   - **DX版** https://matomate-dx.web.app ：21体のミニキャラから選ぶ。
   - 部屋（データベースの置き場所）は版ごとに別（`room` と `roomDx`）。2つのクラスが同時に別々の版を使える。
 - アバターの 3D モデルは `app/public/avatars/`（DX版：avatar1〜21.glb とサムネイル、ピン版：avatar-pin.glb）。ピンの元データは `app/models-src/avatar-pin.gltf`。
+- どちらの版も PWA（ホーム画面に追加すると単独のアプリとして開く）。アプリのアイコンと名前は版ごとに別：ピン版は `app/icons/icon.svg`、DX版は `app/icons/icon-dx.svg`＋キャラの絵（`app/icons/dx/`）＋`icon-dx-badge.svg`。`npm --prefix app run icons` で `public/icons/` と `public/icons-dx/` を作り直し、ビルド後に `scripts/prune-dist.mjs` が各版へ振り分ける。
 - アクセス権のルールは **`database.rules.room.json` を編集**し、`npm --prefix app run rules:build` で `database.rules.json`（2部屋分。デプロイされるのはこちら）を作り直す。
 - お題は Claude が作って `app/src/data/` に入れる。チームのゲームで配るのは `topics-matomate-a.ts`・`topics-matomate-b.ts` の24問だけ（`team: true`。後半用の「別の目的の例」`examples` を持つ）。作るときはローカルスキル `.claude/skills/label-drop-topic/SKILL.md` に従い、`npm --prefix app run topics:check` を通す。
 
