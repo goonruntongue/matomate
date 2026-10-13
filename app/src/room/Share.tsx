@@ -4,6 +4,7 @@
 // machine's LAN addresses instead, because a "localhost" QR code can't be opened from another device.
 import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { appUrl } from '../ui/DevicePanel';
 import { useDialog } from '../ui/useDialog';
 import { EDITION } from './edition';
@@ -26,7 +27,9 @@ export function ShareButton({ label = '📱 QRで招待' }: { label?: string }) 
       <button type="button" className="btn share-button" aria-haspopup="dialog" onClick={() => setOpen(true)}>
         {label}
       </button>
-      {open && <ShareDialog onClose={() => setOpen(false)} />}
+      {/* On <body>, not inside the card the button sits in: the card's blur (backdrop-filter) makes it the
+          frame for `position: fixed`, and the dialog would be centred in the card instead of the screen. */}
+      {open && createPortal(<ShareDialog onClose={() => setOpen(false)} />, document.body)}
     </>
   );
 }
