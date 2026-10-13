@@ -1,0 +1,263 @@
+// Team play on the shared board: the header, teammates' avatar cursors, and the team's chat memo.
+import { limitToLast, onValue, push, query, ref, remove, serverTimestamp, set } from 'firebase/database';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { create } from 'zustand';
+import { PROBLEMS } from '../data/problems';
+import { dom } from '../game/runtime';
+import { useGame } from '../state/store';
+import { Icon } from '../ui/Header';
+import { avatarThumb } from './avatars';
+import { db } from './firebase';
+import { teamsOf, useSession } from './session';
+import { CURSOR_IDLE_MS, myPointer, startTeamSync } from './teamSync';
+
+const CHAT_MAX = 500;
+const CHAT_KEEP = 100;
+const SOUND = 'M11 5 6 9H2v6h4l5 4V5zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14';
+const MUTE = 'M11 5 6 9H2v6h4l5 4V5zM22 9l-6 6M16 9l6 6';
+const MEMO = 'M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z';
+
+interface ChatMessage {
+  id: string;
+  uid: string;
+  name: string;
+  avatar: number;
+  text: string;
+  at: number;
+}
+
+const useTeamUi = create<{ chatOpen: boolean; messages: ChatMessage[]; seenAt: number; setChatOpen(open: boolean): void }>()((set_, get_) => ({
+  chatOpen: false,
+  messages: [],
+  seenAt: 0,
+  setChatOpen: (chatOpen) => set_({ chatOpen, seenAt: Math.max(get_().seenAt, ...get_().messages.map((m) => m.at), 0) }),
+}));
+
+function useMe() {
+  const user = useSession((s) => s.user);
+  const members = useSession((s) => s.members);
+  const me = user ? members[user.uid] : undefined;
+  return { uid: user?.uid ?? '', me, members };
+}
+
+/** Deals the round's board and keeps it in step with the team for as long as it is on screen. */
+export function TeamSession() {
+  const { uid, me } = useMe();
+  const round = useSession((s) => s.round);
+  const teamId = me?.team;
+  const key = round ? `${round.round}|${round.problemId}|${round.seed}|${round.sizes.join(',')}` : '';
+  useLayoutEffect(() => {
+    if (!round || !teamId || !uid) return;
+    if (!useGame.getState().loadTeamBoard(round)) return;
+    const stopSync = startTeamSync(teamId, uid, round.round);
+    // The memo is the team's own: nobody else (not even the game master) can read it.
+    const stopChat = onValue(query(ref(db, `room/chats/${teamId}`), limitToLast(CHAT_KEEP)), (snap) => {
+      const messages: ChatMessage[] = [];
+      snap.forEach((child) => {
+        const v = child.val() as Omit<ChatMessage, 'id'>;
+        if (v && typeof v.text === 'string') messages.push({ ...v, id: child.key!, at: typeof v.at === 'number' ? v.at : Date.now() });
+      });
+      const ui = useTeamUi.getState();
+      useTeamUi.setState({ messages, seenAt: ui.chatOpen ? Math.max(ui.seenAt, ...messages.map((m) => m.at), 0) : ui.seenAt });
+    });
+    return () => {
+      stopSync();
+      stopChat();
+      useTeamUi.setState({ messages: [], seenAt: 0, chatOpen: false });
+    };
+    // `key` stands for the round's contents.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, teamId, uid]);
+  return null;
+}
+
+function Face({ n, className = '' }: { n: number; className?: string }) {
+  return <img className={`avatar-face ${className}`} src={avatarThumb(n)} alt="" draggable={false} />;
+}
+
+export function TeamHeader() {
+  const { uid, me, members } = useMe();
+  const config = useSession((s) => s.config);
+  const problemIndex = useGame((s) => s.problemIndex);
+  const total = useGame((s) => s.items.length);
+  const done = useGame((s) => s.items.reduce((n, item) => (s.assign[item.id] ? n + 1 : n), 0));
+  const muted = useGame((s) => s.muted);
+  const chatOpen = useTeamUi((s) => s.chatOpen);
+  const unread = useTeamUi((s) => (s.chatOpen ? 0 : s.messages.filter((m) => m.at > s.seenAt && m.uid !== uid).length));
+  const team = teamsOf(config).find((t) => t.id === me?.team);
+  const mates = Object.entries(members).filter(([, m]) => m.team === me?.team);
+  const measure = useCallback((el: HTMLElement | null) => {
+    if (!el) return;
+    const apply = () => document.documentElement.style.setProperty('--hud-real', `${el.offsetHeight}px`);
+    apply();
+    new ResizeObserver(apply).observe(el);
+  }, []);
+  return (
+    <header className="hud team-hud" ref={measure}>
+      <div className="hud-brand">
+        <b className="team-brand">
+          Mato <span>mate</span>
+        </b>
+        <span className="badge">{team?.name ?? 'チーム'}</span>
+      </div>
+      <ul className="team-faces" aria-label="チームのメンバー">
+        {mates.map(([id, m]) => (
+          <li key={id} className={m.online === false ? 'is-away' : undefined} title={`${m.name}${m.online === false ? '（切断中）' : ''}`}>
+            <Face n={m.avatar} />
+            <span className="sr-only">{m.name}</span>
+          </li>
+        ))}
+      </ul>
+      <span className="hud-title">{PROBLEMS[problemIndex]?.title}</span>
+      <span className="team-progress num" aria-label={`${total}個中 ${done}個を箱に入れた`}>
+        {done} / {total}
+      </span>
+      <span className="team-hud-space" />
+      <button
+        type="button"
+        className="btn team-memo-btn"
+        aria-expanded={chatOpen}
+        onClick={() => useTeamUi.getState().setChatOpen(!chatOpen)}
+      >
+        <Icon d={MEMO} />
+        メモ
+        {unread > 0 && (
+          <span className="team-unread num" aria-label={`未読 ${unread}件`}>
+            {unread}
+          </span>
+        )}
+      </button>
+      <button
+        type="button"
+        className="btn-icon"
+        aria-label={muted ? 'サウンドをオンにする' : 'サウンドをオフにする'}
+        title={muted ? 'サウンドをオンにする' : 'サウンドをオフにする'}
+        aria-pressed={muted}
+        onClick={() => useGame.getState().toggleMute()}
+      >
+        <Icon d={muted ? MUTE : SOUND} />
+      </button>
+    </header>
+  );
+}
+
+/**
+ * The avatars themselves are 3D models inside the stage (TeamAvatars.tsx). This is only the small ring
+ * that marks the exact spot this player is pointing at: the mouse pointer is hidden on the canvas.
+ */
+export function TeamCursors() {
+  const ring = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let frame = 0;
+    const loop = () => {
+      frame = requestAnimationFrame(loop);
+      const el = ring.current;
+      const rect = dom.stage?.getBoundingClientRect();
+      if (!el || !rect) return;
+      const show = myPointer.inside && Date.now() - myPointer.movedAt < CURSOR_IDLE_MS;
+      el.style.display = show ? '' : 'none';
+      if (show) el.style.transform = `translate3d(${myPointer.x - rect.left}px, ${myPointer.y - rect.top}px, 0)`;
+    };
+    frame = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  return (
+    <div className="team-layer" aria-hidden="true">
+      <div ref={ring} className="team-ring" />
+    </div>
+  );
+}
+
+function clock(at: number): string {
+  const d = new Date(at);
+  return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/** The team's memo: stays out of the way until opened; only this team can read it. */
+export function TeamChat() {
+  const { uid, me } = useMe();
+  const open = useTeamUi((s) => s.chatOpen);
+  const messages = useTeamUi((s) => s.messages);
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState('');
+  const list = useRef<HTMLOListElement>(null);
+  const teamId = me?.team;
+
+  useEffect(() => {
+    if (open) list.current?.scrollTo({ top: list.current.scrollHeight });
+  }, [open, messages.length]);
+
+  if (!open || !me || !teamId) return null;
+  const text = draft.trim();
+  const send = () => {
+    if (!text) return;
+    setError('');
+    setDraft('');
+    set(push(ref(db, `room/chats/${teamId}`)), { uid, name: me.name, avatar: me.avatar, text: text.slice(0, CHAT_MAX), at: serverTimestamp() }).catch(() => {
+      setDraft(text);
+      setError('送れませんでした。もう一度お試しください。');
+    });
+  };
+  const coarse = window.matchMedia('(pointer: coarse)').matches;
+  return (
+    <section className="team-chat" aria-label="チームのメモ">
+      <header className="team-chat-head">
+        <h2>チームのメモ</h2>
+        <small>このチームだけが読めます</small>
+        <button type="button" className="btn-mini" aria-label="メモを閉じる" onClick={() => useTeamUi.getState().setChatOpen(false)}>
+          ×
+        </button>
+      </header>
+      <ol className="team-chat-list" ref={list}>
+        {messages.length === 0 && <li className="team-chat-empty">気づいたことや、分け方の理由を書き残せます。</li>}
+        {messages.map((m) => (
+          <li key={m.id} className={m.uid === uid ? 'is-mine' : undefined}>
+            <Face n={m.avatar} />
+            <div className="team-chat-body">
+              <p className="team-chat-meta">
+                <b>{m.name}</b> <span className="num">{clock(m.at)}</span>
+                {m.uid === uid && (
+                  <button type="button" className="team-chat-delete" onClick={() => void remove(ref(db, `room/chats/${teamId}/${m.id}`)).catch(() => undefined)}>
+                    消す
+                  </button>
+                )}
+              </p>
+              <p className="team-chat-text">{m.text}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      {error && (
+        <p className="team-chat-error" role="alert">
+          {error}
+        </p>
+      )}
+      <form
+        className="team-chat-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          send();
+        }}
+      >
+        <textarea
+          value={draft}
+          rows={2}
+          maxLength={CHAT_MAX}
+          placeholder={coarse ? 'メモを書く' : 'メモを書く（Enter で送信、Shift+Enter で改行）'}
+          aria-label="メモを書く"
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            // Phones: Enter is a line break (there is a send button). IME: Enter confirms the conversion.
+            if (e.key === 'Enter' && !e.shiftKey && !coarse && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              send();
+            }
+          }}
+        />
+        <button type="submit" className="btn btn-primary" disabled={!text}>
+          送る
+        </button>
+      </form>
+    </section>
+  );
+}

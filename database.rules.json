@@ -29,16 +29,71 @@
         "$uid": {
           ".write": "auth != null && auth.uid === $uid && (!newData.exists() || newData.parent().parent().child('seats').child('' + newData.child('seat').val()).val() === auth.uid)",
           ".validate": "newData.hasChildren(['name', 'avatar', 'seat'])",
-          "name": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20 && newData.val() !== 'ゲスト'" },
-          "avatar": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 21" },
-          "seat": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 29 && (!data.exists() || data.val() === newData.val())" },
+          "name": {
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20 && newData.val() !== 'ゲスト'"
+          },
+          "avatar": {
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 21"
+          },
+          "seat": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 29 && (!data.exists() || data.val() === newData.val())"
+          },
           "team": {
             ".validate": "newData.isString() && newData.val().matches(/^t[0-9]{1,2}$/) && (newData.val() === data.val() || !root.child('room/state/phase').exists() || root.child('room/state/phase').val() === 'lobby' || (auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true)"
           },
-          "guest": { ".validate": "newData.isBoolean()" },
-          "online": { ".validate": "newData.isBoolean()" },
-          "joinedAt": { ".validate": "newData.isNumber()" },
-          "$other": { ".validate": false }
+          "guest": {
+            ".validate": "newData.isBoolean()"
+          },
+          "online": {
+            ".validate": "newData.isBoolean()"
+          },
+          "joinedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      },
+      "boards": {
+        ".write": "auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true)",
+        "$team": {
+          ".read": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team || (auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true))",
+          "$round": {
+            "assign": {
+              "$item": {
+                ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && root.child('room/state/phase').val() === 'fixed' && (!data.parent().parent().child('holds').child($item).exists() || data.parent().parent().child('holds').child($item).val() === auth.uid)",
+                ".validate": "newData.hasChildren(['tray', 'at']) && newData.child('tray').isString() && newData.child('tray').val().matches(/^tray-[0-9]$/) && newData.child('at').isNumber()"
+              }
+            },
+            "labels": {
+              "$tray": {
+                ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && root.child('room/state/phase').val() === 'fixed'",
+                ".validate": "$tray.matches(/^tray-[0-9]$/) && newData.isString() && newData.val().length <= 20"
+              }
+            },
+            "holds": {
+              "$item": {
+                ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && root.child('room/state/phase').val() === 'fixed' && (!data.exists() || data.val() === auth.uid) && (!newData.exists() || newData.val() === auth.uid)"
+              }
+            },
+            "cursors": {
+              "$uid": {
+                ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && $uid === auth.uid",
+                ".validate": "newData.child('x').isNumber() && newData.child('y').isNumber()"
+              }
+            }
+          }
+        }
+      },
+      "chats": {
+        ".write": "auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true)",
+        "$team": {
+          ".read": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team",
+          "$msg": {
+            ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((!data.exists() && newData.child('uid').val() === auth.uid) || (data.child('uid').val() === auth.uid && !newData.exists()))",
+            ".validate": "newData.hasChildren(['uid', 'name', 'avatar', 'text', 'at']) && newData.child('text').isString() && newData.child('text').val().length >= 1 && newData.child('text').val().length <= 500 && newData.child('name').isString() && newData.child('name').val().length <= 20 && newData.child('avatar').isNumber() && newData.child('at').isNumber()"
+          }
         }
       }
     }

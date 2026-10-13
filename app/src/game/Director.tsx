@@ -17,6 +17,8 @@ import {
   fieldHomes,
   guide,
   HOLD_Z,
+  remoteCursors,
+  remoteHolds,
   TRAY_DEPTH,
   TRAY_TILT,
   TRAY_TOTAL_H,
@@ -226,6 +228,12 @@ export function Director() {
       tmp.q.copy(tmp.obj.quaternion);
     };
 
+    // Team play: blocks a teammate is carrying follow that teammate's pointer.
+    const carried = new Map<string, { x: number; y: number }>();
+    for (const [uid, c] of remoteCursors) {
+      if (c.held && remoteHolds.get(c.held) === uid) carried.set(c.held, c);
+    }
+
     for (const item of game.items) {
       const b = blocks.get(item.id);
       if (!b?.group) continue;
@@ -333,6 +341,15 @@ export function Director() {
             if (navigator.userActivation?.hasBeenActive) navigator.vibrate?.(8);
           }
         }
+      } else if (carried.has(item.id)) {
+        const c = carried.get(item.id)!;
+        tmp.ndc.set(c.x * 2 - 1, -(c.y * 2 - 1));
+        tmp.ray.setFromCamera(tmp.ndc, cam);
+        if (tmp.ray.ray.intersectPlane(tmp.plane, tmp.a)) b.pos.lerp(tmp.a, ease(12));
+        targetScale = 1.08 * Math.max(0.85, field.scale);
+        glowTarget = 0.8;
+        faceCamera(b.pos);
+        g.quaternion.slerp(tmp.q, ease(14));
       } else if (trayId && trays.get(trayId)?.group) {
         const trt = trays.get(trayId)!;
         const tg = trt.group!;

@@ -14,6 +14,7 @@ export function Inventory() {
   const selected = useGame((s) => s.selected);
   const mode = useGame((s) => s.mode);
   const level = useGame((s) => s.level);
+  const team = useGame((s) => s.team);
   const { select } = useGame.getState();
   const unsorted = useMemo(() => items.filter((item) => !assign[item.id]), [items, assign]);
 
@@ -21,7 +22,7 @@ export function Inventory() {
     <aside className="pane" aria-label="トレイと中身">
       <div className="pane-head">
         <div>
-          <p className="kicker">{mode === 'level' ? `LEVEL ${level} ・ ${levelDef(level).title}` : 'YOUR TRAYS'}</p>
+          <p className="kicker">{team ? 'TEAM TRAYS' : mode === 'level' ? `LEVEL ${level} ・ ${levelDef(level).title}` : 'YOUR TRAYS'}</p>
           <h2>
             トレイ <span className="num">{trays.length}</span>
           </h2>
@@ -33,7 +34,7 @@ export function Inventory() {
         </div>
       </div>
       <SubmitBar />
-      <AssistBar />
+      {!team && <AssistBar />}
       <div className="pane-list">
         {trays.map((tray, i) => (
           <TrayCard key={tray.id} tray={tray} index={i} />
@@ -43,7 +44,7 @@ export function Inventory() {
         <summary>
           ペンディングエリア（未分類） <span className="num">{unsorted.length}</span>
         </summary>
-        <p className="kbd-note">キーボード：ブロックを選んで、1〜{trays.length} キーで箱へ。Ctrl+Z で元に戻す</p>
+        <p className="kbd-note">キーボード：ブロックを選んで、1〜{trays.length} キーで箱へ。{!team && 'Ctrl+Z で元に戻す'}</p>
         <div className="chips">
           {unsorted.map((item) => (
             <button
@@ -74,6 +75,7 @@ function SubmitBar() {
   const level = useGame((s) => s.level);
   const result = useGame((s) => s.result);
   const resultOpen = useGame((s) => s.resultOpen);
+  const team = useGame((s) => s.team);
   const { submit, openResult, newRound, nudgeSubmit } = useGame.getState();
 
   const pending = items.filter((item) => !assign[item.id]).length;
@@ -103,6 +105,21 @@ function SubmitBar() {
             次の問題へ
           </button>
         </div>
+      </section>
+    );
+  }
+
+  // Team play: the checklist only. Handing in the team's answer comes with the game master's controls.
+  if (team) {
+    return (
+      <section className={`submit${ready ? ' is-ready' : ''}`} aria-label="進みぐあい">
+        <ul className="submit-checks">
+          {checks.map((c) => (
+            <li key={c.text} className={c.ok ? 'ok' : undefined}>
+              <span aria-hidden="true">{c.ok ? '✓' : '・'}</span> {c.text}
+            </li>
+          ))}
+        </ul>
       </section>
     );
   }

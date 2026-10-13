@@ -11,6 +11,7 @@ import {
 } from 'firebase/auth';
 import { get, onDisconnect, onValue, ref, serverTimestamp, set, update } from 'firebase/database';
 import { create } from 'zustand';
+import { PROBLEMS } from '../data/problems';
 import { ADMIN_EMAIL, auth, db } from './firebase';
 
 export const MAX_MEMBERS = 30;
@@ -53,7 +54,19 @@ export function teamsOf(config: RoomConfig): Team[] {
   });
 }
 
-export type Phase = 'lobby';
+/** lobby: picking teams. fixed: the first half (a set purpose, with a model answer). */
+export type Phase = 'lobby' | 'fixed';
+
+/** What the game master dealt for this round: every device builds the same board from it. */
+export interface Round {
+  round: number;
+  problemId: string;
+  seed: number;
+  /** Blocks per reference group: [3, 3, 3] = 9 blocks into 3 boxes. */
+  sizes: number[];
+}
+
+export const DEFAULT_SIZES = [3, 3, 3];
 
 interface SessionState {
   /** undefined until Firebase has answered whether someone is signed in. */
@@ -63,6 +76,7 @@ interface SessionState {
   loaded: boolean;
   config: RoomConfig;
   phase: Phase;
+  round: Round | null;
   members: Record<string, Member>;
   /** Shown once on the entry screen (e.g. after being removed by the admin). */
   notice: string;
@@ -76,6 +90,10 @@ interface SessionState {
   chooseTeam: (teamId: string) => Promise<void>;
   leave: () => Promise<void>;
   clearRoom: () => Promise<void>;
+  /** Admin: deal a new round to every team (a random problem for now) and clear the last round's boards and memos. */
+  startGame: () => Promise<void>;
+  /** Admin: back to the lobby. */
+  endGame: () => Promise<void>;
   clearMessages: () => void;
 }
 
@@ -119,7 +137,14 @@ export const useSession = create<SessionState>()((set_, get_) => {
   function watchRoom(user: User) {
     const offs = [
       onValue(ref(db, 'room/config'), (snap) => set_({ config: { ...DEFAULT_CONFIG, ...(snap.val() ?? {}) } })),
-      onValue(ref(db, 'room/state/phase'), (snap) => set_({ phase: (snap.val() as Phase) ?? 'lobby' })),
+      onValue(ref(db, 'room/state'), (snap) => {
+        const v = (snap.val() ?? {}) as Partial<Round> & { phase?: Phase };
+        const ok = typeof v.round === 'number' && typeof v.problemId === 'string' && typeof v.seed === 'number' && Array.isArray(v.sizes);
+        set_({
+          phase: v.phase === 'fixed' && ok ? 'fixed' : 'lobby',
+          round: ok ? { round: v.round!, problemId: v.problemId!, seed: v.seed!, sizes: v.sizes! } : null,
+        });
+      }),
       onValue(
         ref(db, 'room/members'),
         (snap) => {
@@ -147,7 +172,7 @@ export const useSession = create<SessionState>()((set_, get_) => {
     stopRoom?.();
     stopRoom = null;
     wasMember = false;
-    set_({ user, isAdmin: !!user && user.email === ADMIN_EMAIL && user.emailVerified, loaded: false, members: {}, phase: 'lobby' });
+    set_({ user, isAdmin: !!user && user.email === ADMIN_EMAIL && user.emailVerified, loaded: false, members: {}, phase: 'lobby', round: null });
     if (user) stopRoom = watchRoom(user);
   });
 
@@ -185,6 +210,7 @@ export const useSession = create<SessionState>()((set_, get_) => {
     loaded: false,
     config: DEFAULT_CONFIG,
     phase: 'lobby',
+    round: null,
     members: {},
     notice: '',
     error: '',
@@ -232,6 +258,20 @@ export const useSession = create<SessionState>()((set_, get_) => {
       await update(ref(db, 'room'), { [`seats/${me.seat}`]: null, [`members/${user.uid}`]: null }).catch(() => undefined);
     },
     clearRoom: () => run(async () => update(ref(db, 'room'), { seats: null, members: null })),
+    startGame: () =>
+      run(async () => {
+        const sizes = DEFAULT_SIZES;
+        const fits = PROBLEMS.filter((p) => p.source !== 'ai' && p.groups.length >= sizes.length && p.groups.every((g) => g.items.length >= Math.max(...sizes)));
+        const last = get_().round;
+        const pool = fits.filter((p) => p.id !== last?.problemId);
+        const problem = (pool.length ? pool : fits)[Math.floor(Math.random() * (pool.length || fits.length))];
+        await update(ref(db, 'room'), {
+          state: { phase: 'fixed', round: (last?.round ?? 0) + 1, problemId: problem.id, seed: Math.floor(Math.random() * 2 ** 31), sizes },
+          boards: null,
+          chats: null,
+        });
+      }),
+    endGame: () => run(async () => set(ref(db, 'room/state/phase'), 'lobby')),
     clearMessages: () => set_({ notice: '', error: '' }),
   };
 });

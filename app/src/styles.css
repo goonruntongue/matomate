@@ -1450,3 +1450,95 @@ body.is-dragging .buddy-figure, .buddy.is-hidden .buddy-figure { pointer-events:
   .team-card { min-height: 0; }
   .team-card .member-list { flex-direction: row; flex-wrap: wrap; gap: 6px 12px; }
 }
+
+
+/* ---------- Team play: header, avatar cursors, memo (Mato mate) ---------- */
+.team-hud { gap: 12px; }
+.team-brand { font-family: var(--font-display); font-size: 18px; letter-spacing: -0.01em; white-space: nowrap; }
+.team-brand span { color: var(--accent); }
+.team-faces { list-style: none; display: flex; margin: 0; padding: 0; }
+.team-faces li { width: 34px; height: 34px; margin-left: -6px; border-radius: 50%; border: 1px solid var(--line); background: var(--bg-1); overflow: hidden; }
+.team-faces li:first-child { margin-left: 0; }
+.team-faces li.is-away { opacity: 0.35; }
+.team-progress { font-size: 13px; color: var(--text-2); white-space: nowrap; }
+.team-hud-space { flex: 1 1 auto !important; }
+.team-memo-btn { position: relative; display: inline-flex; align-items: center; gap: 6px; font-weight: 700; white-space: nowrap; }
+.team-unread { position: absolute; top: -6px; right: -6px; min-width: 18px; padding: 1px 5px; border-radius: 999px; font-size: 11px; line-height: 16px; text-align: center; color: #fff; background: var(--danger); }
+@media (pointer: coarse) { .team-memo-btn { min-height: 44px; } }
+
+/* The avatar is the pointer on the canvas (a mouse pointer would sit on top of it). */
+.app.is-team .stage canvas { cursor: none; }
+body.is-dragging .app.is-team .stage canvas { cursor: none !important; }
+
+.team-layer { position: absolute; inset: 0; z-index: 24; pointer-events: none; overflow: hidden; }
+/* Names under the 3D avatars (TeamAvatars.tsx). */
+.team-name {
+  max-width: 9em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-1);
+  background: var(--glass);
+  border: 1px solid var(--line-soft);
+}
+/* The exact spot this player is pointing at. */
+.team-ring { position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 30%, transparent); }
+
+/* Memo: a floating panel in the stage's lower-left on wide screens, a bottom sheet on phones. */
+.team-chat {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  z-index: 40;
+  width: 340px;
+  max-width: calc(100vw - 24px);
+  height: min(460px, calc(100dvh - var(--hud-real, var(--hud-h)) - 24px));
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--glass);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+}
+.team-chat-head { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
+.team-chat-head h2 { margin: 0; font-size: 14px; }
+.team-chat-head small { flex: 1; color: var(--text-2); font-size: 11px; }
+.team-chat-list { flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; touch-action: pan-y; overscroll-behavior: contain; }
+.team-chat-list li { display: flex; gap: 8px; align-items: flex-start; }
+.team-chat-list .avatar-face { flex: none; width: 30px; height: 30px; }
+.team-chat-empty { color: var(--text-2); font-size: 12px; line-height: 1.6; }
+.team-chat-body { min-width: 0; flex: 1; }
+.team-chat-meta { margin: 0; display: flex; align-items: baseline; gap: 6px; font-size: 11px; color: var(--text-2); }
+.team-chat-meta b { color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-chat-delete { margin-left: auto; padding: 2px 6px; border: 0; background: none; color: var(--text-2); font-size: 11px; text-decoration: underline; cursor: pointer; }
+.team-chat-delete:hover { color: var(--danger); }
+.team-chat-text { margin: 2px 0 0; font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.team-chat-error { margin: 0; padding: 6px 12px; font-size: 12px; color: var(--danger); }
+.team-chat-form { display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px; border-top: 1px solid var(--line-soft); }
+.team-chat-form textarea {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  padding: 8px 10px;
+  font: inherit;
+  /* 16px: iOS zooms the page when a smaller input takes focus. */
+  font-size: 16px;
+  line-height: 1.4;
+  color: inherit;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: color-mix(in srgb, var(--bg-0) 60%, transparent);
+}
+.team-chat-form .btn { min-height: 44px; white-space: nowrap; }
+@media (max-width: 900px) {
+  .team-chat { left: 0; right: 0; bottom: 0; width: auto; max-width: none; height: min(52dvh, 420px); border-radius: var(--r-card) var(--r-card) 0 0; border-bottom: 0; padding-bottom: env(safe-area-inset-bottom); }
+}
+@media (max-width: 640px) {
+  .team-hud .hud-title, .team-hud .team-progress { display: none; }
+  .team-brand { font-size: 15px; }
+}

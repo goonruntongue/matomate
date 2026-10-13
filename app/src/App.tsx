@@ -19,9 +19,10 @@ import { Buddy } from './ui/Buddy';
 import { CharacterGallery, CharacterReveal } from './ui/Characters';
 import { Tutorial } from './ui/Tutorial';
 import { Entry } from './room/Entry';
+import { useSession } from './room/session';
+import { TeamChat, TeamCursors, TeamHeader, TeamSession } from './room/TeamPlay';
 
-// The team game is not wired to the board yet: until it is, everyone stays on the entry screens.
-// ?solo opens the single-player board that Mato mate is being built from (for development).
+// ?solo opens the single-player board that Mato mate is built from (for development).
 const SOLO = new URLSearchParams(location.search).has('solo');
 
 // Block textures are baked once, so every glyph subset must be loaded before the stage mounts.
@@ -46,6 +47,15 @@ function useKeyboard() {
         return;
       }
       if ((e.target as HTMLElement | null)?.closest('input, textarea, select')) return;
+      // Team play: no undo (it would also undo teammates' moves), no tuning or hint panels.
+      if (game.team) {
+        const n = Number(e.key);
+        if (n >= 1 && n <= 5 && game.selected && !(e.target as HTMLElement | null)?.closest('input, textarea, select')) {
+          const tray = game.trays[n - 1];
+          if (tray) sendTo(game.selected, tray.id);
+        }
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (game.undo()) audio.drop();
@@ -71,10 +81,13 @@ function useKeyboard() {
 }
 
 export default function App() {
-  return SOLO ? <SoloApp /> : <Entry />;
+  // In the game: a member of a team while a round is on. Everyone else is on the entry screens.
+  const playing = useSession((s) => s.phase !== 'lobby' && !!s.round && !!s.user && !!s.members[s.user.uid]?.team);
+  if (SOLO) return <Board team={false} />;
+  return playing ? <Board team /> : <Entry />;
 }
 
-function SoloApp() {
+function Board({ team }: { team: boolean }) {
   const [ready, setReady] = useState(false);
   const announcement = useGame((s) => s.announcement);
   const theme = useGame((s) => s.theme);
@@ -94,14 +107,16 @@ function SoloApp() {
   }, []);
   useKeyboard();
   useEffect(() => {
+    if (team) return;
     void useAi.getState().refresh(); // AI ENERGY: once at start (no polling)
     const { mode, level } = useGame.getState();
     if (mode === 'level') void prefetchAi(tiersForLevel(level)); // an AI problem for the next board
-  }, []);
+  }, [team]);
 
   return (
-    <div className="app">
-      <Header />
+    <div className={`app${team ? ' is-team' : ''}`}>
+      {team && <TeamSession />}
+      {team ? <TeamHeader /> : <Header />}
       <main className="main">
         <section
           className="stage"
@@ -120,10 +135,10 @@ function SoloApp() {
               <small className="loading-note">キーワードの文字を準備しています…</small>
             </div>
           )}
-          <Buddy />
+          {team ? <TeamCursors /> : <Buddy />}
           <BriefCard />
-          <HintPanel />
-          <ResultPanel />
+          {!team && <HintPanel />}
+          {!team && <ResultPanel />}
           <BriefingOverlay />
         </section>
         <Inventory />
@@ -136,12 +151,18 @@ function SoloApp() {
         }}
       />
       <KeywordTip />
-      <RoundEffects />
-      <CharacterReveal />
-      <CharacterGallery />
-      <Tutorial />
-      <Celebration />
-      <DebugPanel />
+      {team ? (
+        <TeamChat />
+      ) : (
+        <>
+          <RoundEffects />
+          <CharacterReveal />
+          <CharacterGallery />
+          <Tutorial />
+          <Celebration />
+          <DebugPanel />
+        </>
+      )}
       <div className="sr-only" aria-live="polite">
         {announcement}
       </div>

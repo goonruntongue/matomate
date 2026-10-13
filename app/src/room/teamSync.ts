@@ -1,0 +1,265 @@
+// Team play: keeps one team's board the same on every member's device.
+//
+// Shared in the database, under room/boards/{team}/r{round}:
+//   assign/{block}  = { tray, at }   which tray a block is in (missing = pending area)
+//   labels/{tray}   = text
+//   holds/{block}   = uid            who is holding or throwing the block right now
+//   cursors/{uid}   = { x, y, h }    pointer over the stage (fractions of the stage) and the block carried
+//
+// Two people reaching for the same block: the first hold written wins (the rules refuse the second),
+// and the loser's block springs back. Two people typing the same label: the last one to stop typing wins.
+import { onDisconnect, onValue, ref, remove, serverTimestamp, set, update } from 'firebase/database';
+import { remoteSend, yieldBlock } from '../game/input';
+import { blocks, dom, drag, remoteCursors, remoteHolds } from '../game/runtime';
+import { useGame } from '../state/store';
+import { db } from './firebase';
+
+const TICK_MS = 100;
+/** A pointer that hasn't moved for this long is no longer shown to the team. */
+export const CURSOR_IDLE_MS = 4000;
+const LABEL_SEND_MS = 300;
+/** While this player is typing a label, a teammate's edits to the same label wait this long. */
+const LABEL_QUIET_MS = 1200;
+
+/** This player's pointer (page pixels), whether it is over the stage, and when it last moved. */
+export const myPointer = { x: 0, y: 0, inside: false, movedAt: 0 };
+
+interface RemoteAssign {
+  tray: string;
+  at: number;
+}
+
+export function startTeamSync(teamId: string, uid: string, round: number): () => void {
+  const base = `room/boards/${teamId}/r${round}`;
+  const at = (path: string) => ref(db, `${base}/${path}`);
+  let remoteAssign: Record<string, RemoteAssign> = {};
+  let remoteLabels: Record<string, string> = {};
+  /** True while a change coming from the team is being put into the store (so it isn't sent back). */
+  let fromRemote = false;
+  /** Blocks flying on this screen to replay a teammate's move. */
+  const replaying = new Set<string>();
+  /** Blocks this player has claimed (held or thrown). */
+  const claimed = new Set<string>();
+  /** This player's moves that the database hasn't confirmed yet (block → tray): not to be undone by older news. */
+  const unconfirmed = new Map<string, string | null>();
+  const labelEditedAt = new Map<string, number>();
+  const labelTimers = new Map<string, number>();
+  let stopped = false;
+
+  const wanted = (itemId: string) => remoteAssign[itemId]?.tray ?? null;
+  const busyHere = (itemId: string) => {
+    const rt = blocks.get(itemId);
+    return !!rt && (rt.phase === 'held' || (rt.phase === 'flying' && !rt.flight?.remote));
+  };
+
+  /** Bring the local board in line with the team's. */
+  function applyAssign() {
+    const game = useGame.getState();
+    const assign = { ...game.assign };
+    const assignedAt = { ...game.assignedAt };
+    let changed = false;
+    for (const item of game.items) {
+      const want = wanted(item.id);
+      const stamp = remoteAssign[item.id]?.at;
+      if (want && typeof stamp === 'number' && assignedAt[item.id] !== stamp && (assign[item.id] ?? null) === want) {
+        assignedAt[item.id] = stamp;
+        changed = true;
+      }
+      if (unconfirmed.has(item.id)) {
+        if (unconfirmed.get(item.id) !== want) continue;
+        unconfirmed.delete(item.id);
+      }
+      if ((assign[item.id] ?? null) === want || busyHere(item.id) || replaying.has(item.id)) continue;
+      if (want && game.trays.some((t) => t.id === want) && remoteSend(item.id, want)) {
+        replaying.add(item.id); // lands through moveItem, see the store subscription below
+        continue;
+      }
+      assign[item.id] = want;
+      if (want && typeof stamp === 'number') assignedAt[item.id] = stamp;
+      changed = true;
+    }
+    if (!changed) return;
+    fromRemote = true;
+    useGame.setState({ assign, assignedAt });
+    fromRemote = false;
+  }
+
+  function applyLabels() {
+    const game = useGame.getState();
+    const now = Date.now();
+    let trays = game.trays;
+    for (const tray of game.trays) {
+      const want = remoteLabels[tray.id] ?? '';
+      if (tray.label === want) continue;
+      const quietUntil = (labelEditedAt.get(tray.id) ?? 0) + LABEL_QUIET_MS;
+      if (now < quietUntil) {
+        // Typing here: look again once the typing has paused (by then our own text has been sent).
+        window.setTimeout(() => !stopped && applyLabels(), quietUntil - now + 20);
+        continue;
+      }
+      trays = trays.map((t) => (t.id === tray.id ? { ...t, label: want } : t));
+    }
+    if (trays === game.trays) return;
+    fromRemote = true;
+    useGame.setState({ trays });
+    fromRemote = false;
+  }
+
+  const offs = [
+    onValue(at('assign'), (snap) => {
+      remoteAssign = (snap.val() ?? {}) as Record<string, RemoteAssign>;
+      applyAssign();
+    }),
+    onValue(at('labels'), (snap) => {
+      remoteLabels = (snap.val() ?? {}) as Record<string, string>;
+      applyLabels();
+    }),
+    onValue(at('holds'), (snap) => {
+      const holds = (snap.val() ?? {}) as Record<string, string>;
+      remoteHolds.clear();
+      for (const [itemId, holder] of Object.entries(holds)) {
+        if (holder === uid) continue;
+        remoteHolds.set(itemId, holder);
+        // Both reached for it: the database kept the teammate's hold.
+        if (busyHere(itemId)) {
+          claimed.delete(itemId);
+          yieldBlock(itemId);
+        }
+      }
+    }),
+    onValue(at('cursors'), (snap) => {
+      const cursors = (snap.val() ?? {}) as Record<string, { x: number; y: number; h?: string }>;
+      remoteCursors.clear();
+      for (const [who, c] of Object.entries(cursors)) {
+        if (who !== uid && typeof c?.x === 'number' && typeof c?.y === 'number') remoteCursors.set(who, { x: c.x, y: c.y, held: c.h ?? null });
+      }
+    }),
+  ];
+
+  // Local changes → the team.
+  const unsubscribe = useGame.subscribe((s, prev) => {
+    if (fromRemote || stopped) return;
+    if (s.assign !== prev.assign) {
+      const writes: Record<string, unknown> = {};
+      for (const item of s.items) {
+        const now = s.assign[item.id] ?? null;
+        if (now === (prev.assign[item.id] ?? null)) continue;
+        if (replaying.delete(item.id)) continue; // a teammate's move has landed here
+        if (now === wanted(item.id)) continue;
+        writes[`assign/${item.id}`] = now ? { tray: now, at: serverTimestamp() } : null;
+        writes[`holds/${item.id}`] = null;
+        claimed.delete(item.id);
+        unconfirmed.set(item.id, now);
+      }
+      const sent = Object.keys(writes).filter((k) => k.startsWith('assign/')).map((k) => k.slice(7));
+      if (sent.length) {
+        update(ref(db, base), writes).catch(() => {
+          // Refused (a teammate holds the block, or the round is over): show the team's board again.
+          sent.forEach((id) => unconfirmed.delete(id));
+          if (!stopped) applyAssign();
+        });
+      }
+      // A replayed move may have been overtaken by a newer one while it was in the air.
+      applyAssign();
+    }
+    if (s.trays !== prev.trays) {
+      for (const tray of s.trays) {
+        const before = prev.trays.find((t) => t.id === tray.id);
+        if (!before || before.label === tray.label) continue;
+        labelEditedAt.set(tray.id, Date.now());
+        window.clearTimeout(labelTimers.get(tray.id));
+        labelTimers.set(
+          tray.id,
+          window.setTimeout(() => {
+            const label = useGame.getState().trays.find((t) => t.id === tray.id)?.label ?? '';
+            if (!stopped && label !== (remoteLabels[tray.id] ?? '')) void set(at(`labels/${tray.id}`), label).catch(() => undefined);
+          }, LABEL_SEND_MS),
+        );
+      }
+    }
+  });
+
+  // This player's pointer over the stage.
+  const track = (ev: PointerEvent) => {
+    const rect = dom.stage?.getBoundingClientRect();
+    myPointer.x = ev.clientX;
+    myPointer.y = ev.clientY;
+    myPointer.inside = !!rect && ev.clientX >= rect.left && ev.clientX <= rect.right && ev.clientY >= rect.top && ev.clientY <= rect.bottom;
+    myPointer.movedAt = Date.now();
+  };
+  const leave = () => {
+    myPointer.inside = false;
+  };
+  window.addEventListener('pointermove', track);
+  window.addEventListener('pointerdown', track);
+  // A lifted finger is no longer pointing anywhere (a mouse stays where it is).
+  const lift = (ev: PointerEvent) => {
+    if (ev.pointerType !== 'mouse') leave();
+  };
+  window.addEventListener('pointerup', lift);
+  window.addEventListener('pointercancel', leave);
+  document.addEventListener('pointerleave', leave);
+
+  const myCursor = at(`cursors/${uid}`);
+  void onDisconnect(myCursor).remove().catch(() => undefined);
+  let sentCursor = '';
+
+  const tick = window.setInterval(() => {
+    // Claim the blocks this player is holding or throwing; release the ones that are done.
+    const game = useGame.getState();
+    for (const item of game.items) {
+      const busy = busyHere(item.id);
+      if (busy && !claimed.has(item.id)) {
+        if (remoteHolds.has(item.id)) {
+          yieldBlock(item.id);
+          continue;
+        }
+        claimed.add(item.id);
+        const hold = at(`holds/${item.id}`);
+        void onDisconnect(hold).remove().catch(() => undefined);
+        set(hold, uid).catch(() => {
+          claimed.delete(item.id);
+          if (busyHere(item.id)) yieldBlock(item.id);
+        });
+      } else if (!busy && claimed.has(item.id)) {
+        claimed.delete(item.id);
+        const hold = at(`holds/${item.id}`);
+        void remove(hold).catch(() => undefined);
+        void onDisconnect(hold).cancel().catch(() => undefined);
+      }
+    }
+
+    // Pointer: sent only while it moves over the stage.
+    const rect = dom.stage?.getBoundingClientRect();
+    const show = !!rect && myPointer.inside && Date.now() - myPointer.movedAt < CURSOR_IDLE_MS;
+    let next = '';
+    if (show && rect) {
+      const x = Math.round(((myPointer.x - rect.left) / Math.max(1, rect.width)) * 1000) / 1000;
+      const y = Math.round(((myPointer.y - rect.top) / Math.max(1, rect.height)) * 1000) / 1000;
+      const held = drag.active && drag.moved && drag.id ? drag.id : null;
+      next = JSON.stringify(held ? { x, y, h: held } : { x, y });
+    }
+    if (next !== sentCursor) {
+      sentCursor = next;
+      void (next ? set(myCursor, JSON.parse(next)) : remove(myCursor)).catch(() => undefined);
+    }
+  }, TICK_MS);
+
+  return () => {
+    stopped = true;
+    offs.forEach((off) => off());
+    unsubscribe();
+    window.clearInterval(tick);
+    labelTimers.forEach((id) => window.clearTimeout(id));
+    window.removeEventListener('pointermove', track);
+    window.removeEventListener('pointerdown', track);
+    window.removeEventListener('pointerup', lift);
+    window.removeEventListener('pointercancel', leave);
+    document.removeEventListener('pointerleave', leave);
+    void remove(myCursor).catch(() => undefined);
+    void onDisconnect(myCursor).cancel().catch(() => undefined);
+    for (const itemId of claimed) void remove(at(`holds/${itemId}`)).catch(() => undefined);
+    remoteHolds.clear();
+    remoteCursors.clear();
+  };
+}

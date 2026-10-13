@@ -164,6 +164,10 @@ function Lobby() {
   const leave = useSession((s) => s.leave);
   const signOut = useSession((s) => s.signOut);
   const clearRoom = useSession((s) => s.clearRoom);
+  const phase = useSession((s) => s.phase);
+  const startGame = useSession((s) => s.startGame);
+  const endGame = useSession((s) => s.endGame);
+  const playing = phase !== 'lobby';
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const me: Member | undefined = members[user.uid];
@@ -177,7 +181,17 @@ function Lobby() {
       <div className="lobby-head">
         <div>
           <p className="kicker">LOBBY</p>
-          <h2 className="entry-title">{me ? (me.team ? 'ゲームが始まるまで、お待ちください' : 'チームを選んでください') : '参加者のようす'}</h2>
+          <h2 className="entry-title">
+            {playing
+              ? me
+                ? 'ゲーム中です。次のゲームが始まるまで、お待ちください'
+                : 'ゲーム中です'
+              : me
+                ? me.team
+                  ? 'ゲームが始まるまで、お待ちください'
+                  : 'チームを選んでください'
+                : '参加者のようす'}
+          </h2>
         </div>
         <span className="lobby-count num" aria-label={`参加者 ${list.length}人（上限 ${MAX_MEMBERS}人）`}>
           {list.length} / {MAX_MEMBERS}
@@ -202,7 +216,7 @@ function Lobby() {
                   <MemberChip key={uid} member={m} me={uid === user.uid} />
                 ))}
               </ul>
-              {me && !mine && (
+              {me && !mine && !playing && (
                 <button type="button" className="btn team-join" disabled={busy || full} onClick={() => void chooseTeam(team.id)}>
                   {full ? '満員' : me.team ? 'ここへ移る' : 'ここに入る'}
                 </button>
@@ -236,6 +250,17 @@ function Lobby() {
             ログアウト
           </button>
         )}
+        {isAdmin &&
+          !confirming &&
+          (playing ? (
+            <button type="button" className="btn" disabled={busy} onClick={() => void endGame()}>
+              ゲームを終えてロビーへ戻す
+            </button>
+          ) : (
+            <button type="button" className="btn btn-primary" disabled={busy || !list.some(([, m]) => m.team)} onClick={() => void startGame()}>
+              ゲームを始める
+            </button>
+          ))}
         {isAdmin && !confirming && (
           <button type="button" className="btn btn-danger" disabled={busy || list.length === 0} onClick={() => setConfirming(true)}>
             全員を退室させる

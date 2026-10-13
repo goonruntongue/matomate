@@ -2,7 +2,7 @@ import type { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import * as audio from '../audio';
 import { useGame } from '../state/store';
-import { blocks, dom, drag, HOLD_Z, trayScreen, view, type BlockRT } from './runtime';
+import { blocks, dom, drag, HOLD_Z, remoteHolds, trayScreen, view, type BlockRT } from './runtime';
 
 const TAP_MOVE_PX = 7;
 /** Fingers jitter more than a mouse: a touch must travel further before it counts as a throw. */
@@ -116,7 +116,7 @@ function startFlight(rt: BlockRT, to: string) {
 export function sendTo(itemId: string, trayId: string) {
   const rt = blocks.get(itemId);
   const game = useGame.getState();
-  if (!rt || rt.phase !== 'rest' || game.result || game.assign[itemId] === trayId) return;
+  if (!rt || rt.phase !== 'rest' || game.result || game.assign[itemId] === trayId || remoteHolds.has(itemId)) return;
   if (!canAccept(trayId, itemId)) {
     audio.miss();
     game.select(null);
@@ -124,6 +124,33 @@ export function sendTo(itemId: string, trayId: string) {
   }
   startFlight(rt, trayId);
   audio.whoosh(900);
+}
+
+/** Team play: replay a teammate's move as a flight into the tray. False if the block can't fly right now. */
+export function remoteSend(itemId: string, trayId: string): boolean {
+  const rt = blocks.get(itemId);
+  if (!rt?.group || !rt.spawned || rt.phase !== 'rest') return false;
+  startFlight(rt, trayId);
+  rt.flight!.remote = true;
+  return true;
+}
+
+/** Team play: a teammate got this block first. Put it back, whatever this player was doing with it. */
+export function yieldBlock(itemId: string) {
+  const rt = blocks.get(itemId);
+  if (drag.active && drag.id === itemId) {
+    finish();
+    if (drag.peeked) {
+      drag.peeked = false;
+      useGame.getState().setPeek(null);
+    }
+  }
+  if (rt && !(rt.phase === 'flying' && rt.flight?.remote)) {
+    rt.phase = 'rest';
+    rt.flight = null;
+  }
+  const game = useGame.getState();
+  if (game.selected === itemId) game.select(null);
 }
 
 /**
@@ -150,7 +177,7 @@ export function beginDrag(id: string, e: ThreeEvent<PointerEvent>) {
   if (ne.pointerType === 'mouse' && ne.button !== 0) return;
   const rt = blocks.get(id);
   const game = useGame.getState();
-  if (!rt || rt.phase === 'flying' || game.result || game.briefingOpen) return;
+  if (!rt || rt.phase === 'flying' || game.result || game.briefingOpen || remoteHolds.has(id)) return;
   const now = performance.now();
   // Long-press (touch) shows the keyword's meaning instead of starting a throw.
   window.clearTimeout(longPressTimer);

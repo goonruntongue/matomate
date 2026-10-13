@@ -29,6 +29,7 @@ export function BriefingOverlay() {
   const problemIndex = useGame((s) => s.problemIndex);
   const itemCount = useGame((s) => s.items.length);
   const trays = useGame((s) => s.trays);
+  const team = useGame((s) => s.team);
   const dialog = useDialog<HTMLDivElement>(() => useGame.getState().dismissBriefing(), open);
   if (!open) return null;
   const problem = PROBLEMS[problemIndex];
@@ -47,7 +48,7 @@ export function BriefingOverlay() {
             LEVEL {level} ・ {def.title} ・ {titleFor(level)}
           </p>
         ) : (
-          <p className="kicker">FREE PLAY</p>
+          <p className="kicker">{team ? 'TEAM PLAY ・ チームで相談しながら分けよう' : 'FREE PLAY'}</p>
         )}
         <h2>
           {problem.title}

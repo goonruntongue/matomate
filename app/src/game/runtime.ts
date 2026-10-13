@@ -42,6 +42,8 @@ export interface Flight {
   q0: THREE.Quaternion;
   /** Tumble (radians around the block's own axis) that unwinds to 0 by landing; auto flights only. */
   spin: number;
+  /** Team play: this flight replays a teammate's move (it is not this player's own action). */
+  remote?: boolean;
 }
 
 export interface BlockRT {
@@ -124,6 +126,12 @@ export const dom = {
 };
 
 export const guide = { line: null as QuadraticBezierLineRef | null };
+
+// Team play (filled by room/teamSync.ts; empty in single play).
+/** Blocks a teammate is holding or throwing right now (block id → that member's uid): not ours to grab. */
+export const remoteHolds = new Map<string, string>();
+/** Teammates' pointers over the stage, as fractions of the stage (0..1), and the block each one is carrying. */
+export const remoteCursors = new Map<string, { x: number; y: number; held: string | null }>();
 
 // Dev-only handle for inspecting input/physics state from the console.
 export const debug = { camera: null as THREE.Camera | null };

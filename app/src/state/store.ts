@@ -185,10 +185,22 @@ export function trayCountFor(blockCount: number): number {
   return Math.min(MAX_TRAYS, Math.max(MIN_TRAYS, Math.ceil(blockCount / ITEMS_PER_TRAY)));
 }
 
-function shuffle<T>(list: T[]): T[] {
+/** Small seeded random number generator (mulberry32): the same seed deals the same board on every device. */
+export function seededRandom(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffle<T>(list: T[], random: () => number = Math.random): T[] {
   const out = [...list];
   for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(random() * (i + 1));
     [out[i], out[j]] = [out[j], out[i]];
   }
   return out;
@@ -201,22 +213,25 @@ let moveSeq = 0;
  * A board: one reference group per size in `sizes` (groups chosen at random), `sizes[i]` keywords from each,
  * and exactly as many trays. Capacities are attached to trays (shuffled) only when the level shows them.
  */
-function freshBoard(problemIndex: number, sizes: number[], showCapacity: boolean) {
+function freshBoard(problemIndex: number, sizes: number[], showCapacity: boolean, seed?: number) {
   const problem = PROBLEMS[problemIndex];
-  const groups = shuffle(problem.groups.map((group, gi) => ({ group, gi }))).slice(0, sizes.length);
+  // Team play passes a seed: every member's device must deal the same blocks and the same tray ids.
+  const random = seed === undefined ? Math.random : seededRandom(seed);
+  const groups = shuffle(problem.groups.map((group, gi) => ({ group, gi })), random).slice(0, sizes.length);
   const items = shuffle(
     groups.flatMap(({ group, gi }, i) =>
-      shuffle(group.items.map((kw, ii) => ({ id: `${problem.id}-${gi}-${ii}`, text: kw.text, desc: kw.desc }))).slice(0, sizes[i]),
+      shuffle(group.items.map((kw, ii) => ({ id: `${problem.id}-${gi}-${ii}`, text: kw.text, desc: kw.desc })), random).slice(0, sizes[i]),
     ),
+    random,
   );
-  const capacities = shuffle(sizes);
+  const capacities = shuffle(sizes, random);
   return {
     problemIndex,
     items,
     assign: Object.fromEntries(items.map((item) => [item.id, null])) as Record<string, string | null>,
     assignedAt: {} as Record<string, number>,
     trays: sizes.map((_, i): Tray => ({
-      id: `tray-${++traySeq}`,
+      id: seed === undefined ? `tray-${++traySeq}` : `tray-${i}`,
       label: '',
       colorIndex: i,
       capacity: showCapacity ? capacities[i] : undefined,
@@ -258,6 +273,10 @@ function topicFor(mode: Mode, level: number, current: number): number {
 }
 
 export interface GameState {
+  /** Team play (Mato mate): the board is shared with the team, see room/teamSync.ts. */
+  team: boolean;
+  /** Deal the round's board for team play. Returns false if this device doesn't have the problem. */
+  loadTeamBoard(round: { problemId: string; seed: number; sizes: number[] }): boolean;
   mode: Mode;
   level: number;
   /** Stars collected toward the next level. */
@@ -376,6 +395,13 @@ export const useGame = create<GameState>()((set, get) => {
   return {
     ...initialProgress,
     ...boardFor(initialProgress.mode, initialProgress.level, initialTopic, initialBlockCount),
+    team: false,
+    loadTeamBoard: ({ problemId, seed, sizes }) => {
+      const problemIndex = PROBLEMS.findIndex((p) => p.id === problemId);
+      if (problemIndex < 0) return false;
+      set({ team: true, mode: 'free', ...freshBoard(problemIndex, sizes, false, seed), hintOpen: false, tuningOpen: false, peek: null });
+      return true;
+    },
     muted: false,
     tuning: loadTuning(),
     tuningOpen: false,

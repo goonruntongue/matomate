@@ -9,6 +9,7 @@ import { Director } from './Director';
 import { Guide } from './Guide';
 import { CAMERA_Y, CAMERA_Z, drag, FOV } from './runtime';
 import { Trays } from './Trays';
+import { TeamAvatars } from '../room/TeamAvatars';
 
 /** Compile every shader once the scene is up, so the first drag or highlight doesn't stutter (SPEC 5.5). */
 function Precompile() {
@@ -23,6 +24,7 @@ function Precompile() {
 export function Stage() {
   const bloom = useGame((s) => s.tuning.bloom);
   const theme = THEMES[useGame((s) => s.theme)];
+  const team = useGame((s) => s.team);
   return (
     // The same actions are available in the tray list beside it, so screen readers skip the canvas (SPEC 5.6).
     <Canvas
@@ -44,6 +46,7 @@ export function Stage() {
       <Backdrop />
       <Trays />
       <Blocks />
+      {team && <TeamAvatars />}
       <Guide />
       <Director />
       <Precompile />
