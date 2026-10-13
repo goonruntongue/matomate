@@ -1,0 +1,62 @@
+# Build Label Drop and publish the site to GitHub Pages on every push to main.
+# Site layout: / = IA one-sheet LP (+ 2D prototype), /app/ = Label Drop.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install
+        working-directory: app
+        run: npm ci
+
+      # Static edition, no AI (decision #23, and since #25 every build is static by default).
+      - name: Type-check and build (without AI)
+        working-directory: app
+        env:
+          VITE_AI: 'off'
+        run: npm run build
+
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          cp index.html practice.html practice.css practice.js _site/
+          cp -r assets _site/assets
+          cp -r app/dist _site/app
+          touch _site/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

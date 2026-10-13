@@ -1,0 +1,9 @@
+// Only for scripts/generate-remote.mjs: the production D1 and Workers AI, reached from this machine.
+{
+  "name": "label-drop-api-admin",
+  "compatibility_date": "2026-09-30",
+  "ai": { "binding": "AI", "remote": true },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "label-drop", "database_id": "ee4485e7-40cb-4abb-9590-e12d09e3b71c", "remote": true }
+  ]
+}

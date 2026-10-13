@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="ja">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>practice IA — 分ける、名付ける。</title><link rel="stylesheet" href="practice.css"><script defer src="practice.js?v=2"></script></head>
+<body>
+<header><a href="index.html" class="brand">practice <strong>IA</strong></a><span class="badge">PROTOTYPE · テンプレート出題</span><a href="index.html">IAについて ↗</a></header>
+<main>
+<div class="intro"><div><p class="eyebrow">INFORMATION ARCHITECTURE LAB</p><h1>分ける。名付ける。<span>情報が、つながる。</span></h1><p>キーワードを箱に入れ、自分なりの分類とラベルを考えてみよう。</p></div><div class="settings"><label>練習テーマ<select id="theme"></select></label><label>カード数<select id="size"><option value="15">15枚 · はじめて</option value="30" selected>30枚 · じっくり</option></select></label><button id="restart">新しく始める ↻</button></div></div>
+<div class="toolbar"><div><span class="live-dot"></span><strong id="topic"></strong><span id="progress"></span></div><button id="motion" aria-pressed="false">浮遊を止める</button></div>
+<div class="workspace"><section class="playground" aria-label="未分類のキーワード"><div id="scene" aria-hidden="true"></div><div class="field-head"><span>01 / KEYWORD FIELD</span><span id="render-mode">フロート表示</span></div><p class="hint">ドラッグして箱へ。タップで選んで、箱をタップでもOK。</p><div id="cards"></div><div id="empty" hidden>すべてのカードを分類しました ✨<br><small>ラベルを整えたら提出してみよう。</small></div><div class="field-footer"><span id="selection">カードを選んで分類しよう</span><button id="undo" disabled>ひとつ戻す ↶</button></div></section>
+<aside><div class="aside-head"><div><p class="eyebrow">02 / YOUR GROUPS</p><h2>分類とラベル</h2></div><button id="add">＋ 箱を追加</button></div><div id="groups"></div><div class="submit-area"><p id="requirements" aria-live="polite"></p><button class="primary" id="submit" disabled>分類を提出して比較する →</button></div></aside></div>
+<section id="result" hidden aria-live="polite"></section>
+<p class="footnote">自由な分類も歓迎。模範例はひとつの整理方法です。現在は固定問題・ルールによる比較で、AIは未接続です。</p>
+</main><div id="announcement" class="sr-only" aria-live="polite"></div>
+</body></html>

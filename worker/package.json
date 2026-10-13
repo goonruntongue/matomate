@@ -1,0 +1,30 @@
+{
+  "name": "label-drop-api",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "db:local": "wrangler d1 migrations apply DB --local",
+    "typecheck": "tsc --noEmit",
+    "test": "wrangler d1 migrations apply DB --local --persist-to .wrangler/test-state && node scripts/seed-templates.mjs && wrangler d1 execute DB --local --persist-to .wrangler/test-state --file seed/templates.sql && vitest run",
+    "deploy": "npm test && wrangler deploy",
+    "seed": "node scripts/seed-templates.mjs",
+    "seed:local": "node scripts/seed-templates.mjs && wrangler d1 execute DB --local --file seed/templates.sql",
+    "seed:remote": "node scripts/seed-templates.mjs && wrangler d1 execute DB --remote --file seed/templates.sql",
+    "generate:remote": "node scripts/generate-remote.mjs",
+    "review:export": "node scripts/review-export.mjs",
+    "review:apply": "node scripts/review-apply.mjs"
+  },
+  "dependencies": {
+    "hono": "^4.13.12",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261001.1",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3",
+    "wrangler": "^4.146.0"
+  }
+}

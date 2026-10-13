@@ -1,0 +1,46 @@
+// Label Drop API (SPEC 9). API only: the game itself is served as static files from the portal
+// (Cloudflare Pages / GitHub Pages) and calls this Worker cross-origin (ALLOWED_ORIGINS).
+// Free plan only (SPEC 8.1): everything here fails with an error past the free tier, never bills.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "label-drop-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-30",
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "label-drop",
+      // Created 2026-10-02 (APAC). Local development and tests use a local SQLite copy instead.
+      "database_id": "ee4485e7-40cb-4abb-9590-e12d09e3b71c",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Workers AI. Free plan: past 10,000 Neurons a day calls fail (3036); nothing is billed.
+  // Local development: put AI_MOCK=1 in .dev.vars so `wrangler dev` never spends the allocation.
+  "ai": { "binding": "AI" },
+  // Pre-generation every 30 minutes (SPEC 8.4); only does work before the 09:00 JST reset or when stock is low.
+  // Off since 2026-10-03: problems are written by Claude in the conversation; Workers AI is not used.
+  "triggers": { "crons": [] },
+  "access": {
+    // wrangler dev: pretend Cloudflare Access let this user in (only used when AUTH_MODE=access)
+    "dev": { "aud": "label-drop-dev", "identity": { "email": "dev@example.com", "name": "Dev" } }
+  },
+  "vars": {
+    "AUTH_MODE": "none",
+    "ALLOWED_ORIGINS": "https://knowledge-surrounding-ai.pages.dev,https://goonruntongue.github.io",
+    "ALLOW_LOCALHOST": "1",
+    // ADMIN_EMAILS and ANON_SALT are secrets (`wrangler secret put …`), not committed here.
+    "DAILY_CAP": "9000",
+    "QUOTA_EVAL_PER_DAY": "15",
+    "QUOTA_GEN_PER_DAY": "3",
+    // Rough Neurons per call, for "about N more" in the meter (calibrated once AI calls exist, P4/P5).
+    "EST_GEN_NEURONS": "60",
+    "EST_EVAL_NEURONS": "90",
+    "GEN_MODEL": "@cf/google/gemma-4-26b-a4b-it",
+    "EMBED_MODEL": "@cf/baai/bge-m3",
+    "CALIBRATION": "1.15",
+    "QA_MIN_COHESION": "0.6",
+    "AI_MOCK": "0"
+  }
+}

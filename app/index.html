@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#050C1C" />
+    <meta name="description" content="キーワードを箱に投げ入れて名前を付ける、情報アーキテクチャの練習ゲーム" />
+    <title>Label Drop — practice IA</title>
+    <!-- PWA: installable, full-screen from the home screen -->
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Label Drop" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Noto+Sans+JP:wght@400;500;700;900&family=Space+Grotesk:wght@500;700&display=swap"
+    />
+    <!-- Splash: visible from the first paint until React mounts (it replaces #root's content). -->
+    <style>
+      html, body { margin: 0; background: #050c1c; }
+      html[data-theme='pastel-rainbow'], html[data-theme='pastel-rainbow'] body { background: #e9e4f0; }
+      html[data-theme='kraft-paper'], html[data-theme='kraft-paper'] body { background: #e4d8c4; }
+      .splash { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 14px; color: #f3f8ff; font: 700 14px/1.5 system-ui, 'Hiragino Sans', 'Yu Gothic UI', sans-serif; }
+      html:not([data-theme='midnight-blue']):is([data-theme]) .splash { color: #2d2640; }
+      .splash img { width: 72px; height: 72px; border-radius: 18px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); animation: splash-bob 1.6s ease-in-out infinite; }
+      .splash b { font-size: 22px; letter-spacing: -0.01em; }
+      .splash b span { color: #45e5ff; }
+      .splash small { font-weight: 500; opacity: 0.7; }
+      .splash i { width: 160px; height: 3px; border-radius: 3px; background: linear-gradient(90deg, transparent, #45e5ff, transparent) 0 0 / 50% 100% no-repeat; animation: splash-scan 1.2s ease-in-out infinite; }
+      @keyframes splash-scan { from { background-position: -100% 0; } to { background-position: 200% 0; } }
+      @keyframes splash-bob { 50% { transform: translateY(-6px); } }
+      @media (prefers-reduced-motion: reduce) { .splash img, .splash i { animation: none; } }
+    </style>
+    <script>
+      try { var t = localStorage.getItem('practice-ia:theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root">
+      <div class="splash" role="status">
+        <img src="./icons/icon-192.png" alt="" />
+        <b>Label <span>Drop</span></b>
+        <i></i>
+        <small>練習アプリを準備しています…</small>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
