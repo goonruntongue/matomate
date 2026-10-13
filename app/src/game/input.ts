@@ -116,7 +116,7 @@ function startFlight(rt: BlockRT, to: string) {
 export function sendTo(itemId: string, trayId: string) {
   const rt = blocks.get(itemId);
   const game = useGame.getState();
-  if (!rt || rt.phase !== 'rest' || game.result || game.assign[itemId] === trayId || remoteHolds.has(itemId)) return;
+  if (!rt || rt.phase !== 'rest' || game.result || game.locked || game.assign[itemId] === trayId || remoteHolds.has(itemId)) return;
   if (!canAccept(trayId, itemId)) {
     audio.miss();
     game.select(null);
@@ -177,7 +177,7 @@ export function beginDrag(id: string, e: ThreeEvent<PointerEvent>) {
   if (ne.pointerType === 'mouse' && ne.button !== 0) return;
   const rt = blocks.get(id);
   const game = useGame.getState();
-  if (!rt || rt.phase === 'flying' || game.result || game.briefingOpen || remoteHolds.has(id)) return;
+  if (!rt || rt.phase === 'flying' || game.result || game.locked || game.briefingOpen || remoteHolds.has(id)) return;
   const now = performance.now();
   // Long-press (touch) shows the keyword's meaning instead of starting a throw.
   window.clearTimeout(longPressTimer);

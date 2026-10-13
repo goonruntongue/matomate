@@ -3,13 +3,14 @@ import { limitToLast, onValue, push, query, ref, remove, serverTimestamp, set } 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { PROBLEMS } from '../data/problems';
-import { dom } from '../game/runtime';
+import { yieldBlock } from '../game/input';
+import { dom, drag } from '../game/runtime';
 import { useGame } from '../state/store';
 import { Icon } from '../ui/Header';
 import { avatarThumb } from './avatars';
 import { db } from './firebase';
 import { teamsOf, useSession } from './session';
-import { CURSOR_IDLE_MS, myPointer, startTeamSync } from './teamSync';
+import { COMMENT_MAX, CURSOR_IDLE_MS, myPointer, startTeamSync, useTeamBoard } from './teamSync';
 
 const CHAT_MAX = 500;
 const CHAT_KEEP = 100;
@@ -68,6 +69,15 @@ export function TeamSession() {
     // `key` stands for the round's contents.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, teamId, uid]);
+
+  // Handed in, or the results are out: nobody on the team can move or rename anything.
+  const submitted = useTeamBoard((s) => !!s.submitted);
+  const phase = useSession((s) => s.phase);
+  const locked = submitted || phase !== 'fixed';
+  useEffect(() => {
+    if (locked && drag.active && drag.id) yieldBlock(drag.id);
+    useGame.getState().setLocked(locked);
+  }, [locked]);
   return null;
 }
 
@@ -259,5 +269,137 @@ export function TeamChat() {
         </button>
       </form>
     </section>
+  );
+}
+
+/**
+ * In the tray list: what is still missing, then the team's final comment and the hand-in button.
+ * After handing in, the board is locked for the whole team; the comment can still be edited, and the
+ * answer can be taken back until the game master shows the results.
+ */
+export function TeamSubmit({ checks }: { checks: { ok: boolean; text: string }[] }) {
+  const members = useSession((s) => s.members);
+  const phase = useSession((s) => s.phase);
+  const comment = useTeamBoard((s) => s.comment);
+  const submitted = useTeamBoard((s) => s.submitted);
+  const error = useTeamBoard((s) => s.error);
+  const { setComment, submit, takeBack } = useTeamBoard.getState();
+  const ready = checks.every((c) => c.ok);
+  const revealed = phase !== 'fixed';
+  const commentBox = (
+    <label className="team-comment">
+      <span>
+        最終コメント：なぜ、この分け方にしましたか？
+        <small className="num">
+          {comment.length}/{COMMENT_MAX}
+        </small>
+      </span>
+      <textarea
+        value={comment}
+        rows={3}
+        maxLength={COMMENT_MAX}
+        readOnly={revealed}
+        placeholder="例：使う場面ごとに分けた。迷ったのは〜で、〜と考えてここに入れた。"
+        onChange={(e) => setComment(e.target.value)}
+      />
+    </label>
+  );
+
+  if (submitted || revealed) {
+    return (
+      <section className="submit is-done" aria-label="提出">
+        <p className="submit-title">
+          {revealed ? '結果発表中です' : `提出しました${members[submitted!.by] ? `（${members[submitted!.by].name}さん）` : ''}。結果発表をお待ちください`}
+        </p>
+        {commentBox}
+        {!revealed && (
+          <>
+            <p className="team-submit-note">コメントは、結果発表まで書き直せます。分け方を直したいときは、提出を取り消してください。</p>
+            <button type="button" className="btn" onClick={takeBack}>
+              提出を取り消す
+            </button>
+          </>
+        )}
+        {error && (
+          <p className="team-chat-error" role="alert">
+            {error}
+          </p>
+        )}
+      </section>
+    );
+  }
+
+  return (
+    <section className={`submit${ready ? ' is-ready' : ''}`} aria-label="提出">
+      <ul className="submit-checks">
+        {checks.map((c) => (
+          <li key={c.text} className={c.ok ? 'ok' : undefined}>
+            <span aria-hidden="true">{c.ok ? '✓' : '・'}</span> {c.text}
+          </li>
+        ))}
+        {ready && (
+          <li className={comment.trim() ? 'ok' : undefined}>
+            <span aria-hidden="true">{comment.trim() ? '✓' : '・'}</span> {comment.trim() ? '最終コメントを書いた' : '最終コメントを書く'}
+          </li>
+        )}
+      </ul>
+      {ready && commentBox}
+      <button type="button" className="btn btn-primary submit-button" disabled={!ready || !comment.trim()} onClick={submit}>
+        チームの答えを提出する
+      </button>
+      {error && (
+        <p className="team-chat-error" role="alert">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** Over the stage once the answer is handed in: the board stays visible underneath. */
+export function TeamWaiting() {
+  const submitted = useTeamBoard((s) => !!s.submitted);
+  const phase = useSession((s) => s.phase);
+  if (phase === 'fixed' && !submitted) return null;
+  return (
+    <div className="team-waiting" role="status">
+      {phase === 'fixed' ? (
+        <>
+          <b>提出しました</b>
+          <span>結果発表をお待ちください</span>
+        </>
+      ) : (
+        <>
+          <b>結果発表</b>
+          <span>全チームの答えを並べる画面は、準備中です</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** "マスターの声": the game master's message, popped up on every participant's screen. */
+export function AnnouncementPopup() {
+  const announcement = useSession((s) => s.announcement);
+  const isAdmin = useSession((s) => s.isAdmin);
+  const [closedAt, setClosedAt] = useState(0);
+  const [shownAt, setShownAt] = useState(0);
+  // Only messages sent while this page is open (or just before): an old one must not greet a late arrival.
+  useEffect(() => {
+    if (!announcement) return;
+    const serverNow = Date.now() + useSession.getState().clockOffset;
+    if (serverNow - announcement.at < 60_000) setShownAt(announcement.at);
+  }, [announcement]);
+  if (isAdmin || !announcement || announcement.at !== shownAt || closedAt === announcement.at) return null;
+  return (
+    <div className="announce" role="alertdialog" aria-modal="true" aria-label="マスターの声">
+      <div className="announce-card">
+        <p className="kicker">マスターの声</p>
+        <p className="announce-text">{announcement.text}</p>
+        <button type="button" className="btn btn-primary" autoFocus onClick={() => setClosedAt(announcement.at)}>
+          閉じる
+        </button>
+      </div>
+    </div>
   );
 }

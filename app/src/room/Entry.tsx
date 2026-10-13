@@ -1,6 +1,7 @@
 // Before the game: sign in → nickname and avatar → pick a team and wait in the lobby.
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { SafeBoundary } from '../ui/SafeBoundary';
+import { Admin } from './Admin';
 import { AVATAR_COUNT, avatarThumb, randomAvatar } from './avatars';
 import { MAX_MEMBERS, NAME_MAX, teamsOf, useSession, validName, type Member } from './session';
 
@@ -156,20 +157,15 @@ function MemberChip({ member, me }: { member: Member; me: boolean }) {
 
 function Lobby() {
   const user = useSession((s) => s.user)!;
-  const isAdmin = useSession((s) => s.isAdmin);
   const config = useSession((s) => s.config);
   const members = useSession((s) => s.members);
   const busy = useSession((s) => s.busy);
   const chooseTeam = useSession((s) => s.chooseTeam);
   const leave = useSession((s) => s.leave);
   const signOut = useSession((s) => s.signOut);
-  const clearRoom = useSession((s) => s.clearRoom);
   const phase = useSession((s) => s.phase);
-  const startGame = useSession((s) => s.startGame);
-  const endGame = useSession((s) => s.endGame);
   const playing = phase !== 'lobby';
   const [editing, setEditing] = useState(false);
-  const [confirming, setConfirming] = useState(false);
   const me: Member | undefined = members[user.uid];
   const list = Object.entries(members).sort(([, a], [, b]) => (a.joinedAt ?? 0) - (b.joinedAt ?? 0));
   const teams = teamsOf(config);
@@ -250,46 +246,7 @@ function Lobby() {
             ログアウト
           </button>
         )}
-        {isAdmin &&
-          !confirming &&
-          (playing ? (
-            <button type="button" className="btn" disabled={busy} onClick={() => void endGame()}>
-              ゲームを終えてロビーへ戻す
-            </button>
-          ) : (
-            <button type="button" className="btn btn-primary" disabled={busy || !list.some(([, m]) => m.team)} onClick={() => void startGame()}>
-              ゲームを始める
-            </button>
-          ))}
-        {isAdmin && !confirming && (
-          <button type="button" className="btn btn-danger" disabled={busy || list.length === 0} onClick={() => setConfirming(true)}>
-            全員を退室させる
-          </button>
-        )}
       </div>
-      {/* Asked on the page itself: some browsers (in-app ones, home-screen apps) never show window.confirm. */}
-      {isAdmin && confirming && (
-        <div className="entry-confirm" role="alertdialog" aria-label="全員を退室させる確認">
-          <p>参加者を全員（{list.length}人）退室させます。よろしいですか？</p>
-          <div className="entry-actions">
-            <button type="button" className="btn" autoFocus onClick={() => setConfirming(false)}>
-              やめる
-            </button>
-            <button
-              type="button"
-              className="btn btn-danger"
-              disabled={busy}
-              onClick={() => {
-                setConfirming(false);
-                void clearRoom();
-              }}
-            >
-              全員を退室させる
-            </button>
-          </div>
-        </div>
-      )}
-      {isAdmin && <p className="entry-note">管理者としてログインしています。管理者は参加者の人数には入りません。</p>}
     </div>
   );
 }
@@ -316,7 +273,7 @@ export function Entry() {
       )}
       {step === 'login' && <Login />}
       {step === 'profile' && <Profile />}
-      {step === 'lobby' && <Lobby />}
+      {step === 'lobby' && (isAdmin ? <Admin /> : <Lobby />)}
     </div>
   );
 }

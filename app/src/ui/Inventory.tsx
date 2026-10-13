@@ -6,6 +6,7 @@ import { levelDef } from '../game/levels';
 import { labelIssues } from '../hints/labelRules';
 import { TRAY_GLYPHS, useGame, type Tray } from '../state/store';
 import { THEMES } from '../theme/themes';
+import { TeamSubmit } from '../room/TeamPlay';
 
 export function Inventory() {
   const trays = useGame((s) => s.trays);
@@ -109,20 +110,8 @@ function SubmitBar() {
     );
   }
 
-  // Team play: the checklist only. Handing in the team's answer comes with the game master's controls.
-  if (team) {
-    return (
-      <section className={`submit${ready ? ' is-ready' : ''}`} aria-label="進みぐあい">
-        <ul className="submit-checks">
-          {checks.map((c) => (
-            <li key={c.text} className={c.ok ? 'ok' : undefined}>
-              <span aria-hidden="true">{c.ok ? '✓' : '・'}</span> {c.text}
-            </li>
-          ))}
-        </ul>
-      </section>
-    );
-  }
+  // Team play: the team writes why it sorted this way and hands the answer in (room/TeamPlay.tsx).
+  if (team) return <TeamSubmit checks={checks} />;
 
   return (
     <section className={`submit${ready ? ' is-ready' : ''}`} aria-label="答え合わせ">
@@ -148,7 +137,7 @@ function SubmitBar() {
 /** "おまかせ仕分け": blocks drop themselves from the pending area into trays, with a staggered animation. */
 function AssistBar() {
   const pendingCount = useGame((s) => s.items.reduce((n, item) => (s.assign[item.id] ? n : n + 1), 0));
-  const locked = useGame((s) => s.result !== null);
+  const locked = useGame((s) => s.result !== null || s.locked);
   const [busy, setBusy] = useState(false);
   if (locked) return null;
 
@@ -201,7 +190,7 @@ function TrayCard({ tray, index }: { tray: Tray; index: number }) {
   );
   const color = THEMES[useGame((s) => s.theme)].trayColors[tray.colorIndex];
   const trays = useGame((s) => s.trays);
-  const locked = useGame((s) => s.result !== null);
+  const locked = useGame((s) => s.result !== null || s.locked);
   const full = tray.capacity !== undefined && contents.length >= tray.capacity;
   // Live label hint: only the most important issue, and not the "empty" error (the checklist covers that).
   const issue = useMemo(() => {

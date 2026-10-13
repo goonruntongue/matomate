@@ -38,9 +38,41 @@ export interface RoomConfig {
   teamSize: number;
   /** Team names set by the admin, by team id. Missing ones fall back to Aチーム, Bチーム… */
   teamNames?: Record<string, string>;
+  /** Which set of blocks and boxes the next round deals (an id from BLOCK_SETS). */
+  blockSet: string;
+  /** The next round's problem: 'random', or a problem id. */
+  problem: string;
+  /** Points (correct answers + hearts) are counted and shown. */
+  points: boolean;
+  /** Teams are ranked by points (only when points are on). */
+  ranking: boolean;
+  /** Purposes a team may stock in the second half. */
+  slots: number;
 }
 
-export const DEFAULT_CONFIG: RoomConfig = { teamCount: 5, teamSize: 4 };
+/** Blocks, boxes and how many each box takes. Problems hold 5 groups of 6 words, which bounds these. */
+export const BLOCK_SETS = [
+  { id: '9-3', blocks: 9, trays: 3, each: 3 },
+  { id: '12-3', blocks: 12, trays: 3, each: 4 },
+  { id: '12-4', blocks: 12, trays: 4, each: 3 },
+  { id: '16-4', blocks: 16, trays: 4, each: 4 },
+  { id: '15-5', blocks: 15, trays: 5, each: 3 },
+  { id: '20-5', blocks: 20, trays: 5, each: 4 },
+] as const;
+
+export function blockSetOf(id: string) {
+  return BLOCK_SETS.find((b) => b.id === id) ?? BLOCK_SETS[0];
+}
+
+export const MAX_TEAMS = 10;
+export const MAX_TEAM_SIZE = 10;
+
+export const DEFAULT_CONFIG: RoomConfig = { teamCount: 5, teamSize: 4, blockSet: '9-3', problem: 'random', points: true, ranking: true, slots: 1 };
+
+/** Problems the game master can deal: built-in ones with enough groups and words for every block set. */
+export function dealableProblems() {
+  return PROBLEMS.filter((p) => p.source !== 'ai' && p.groups.length >= 5 && p.groups.every((g) => g.items.length >= 4));
+}
 
 export interface Team {
   id: string;
@@ -54,8 +86,19 @@ export function teamsOf(config: RoomConfig): Team[] {
   });
 }
 
-/** lobby: picking teams. fixed: the first half (a set purpose, with a model answer). */
-export type Phase = 'lobby' | 'fixed';
+/**
+ * lobby: picking teams.
+ * fixed: the first half (a set purpose, with a model answer).
+ * fixedReveal: the game master is showing every team's answer to the first half.
+ */
+export type Phase = 'lobby' | 'fixed' | 'fixedReveal';
+const PHASES: Phase[] = ['lobby', 'fixed', 'fixedReveal'];
+
+/** The game master's message to everyone ("マスターの声"). */
+export interface Announcement {
+  text: string;
+  at: number;
+}
 
 /** What the game master dealt for this round: every device builds the same board from it. */
 export interface Round {
@@ -64,9 +107,9 @@ export interface Round {
   seed: number;
   /** Blocks per reference group: [3, 3, 3] = 9 blocks into 3 boxes. */
   sizes: number[];
+  /** Each box shows how many blocks it takes, and refuses more. */
+  caps?: boolean;
 }
-
-export const DEFAULT_SIZES = [3, 3, 3];
 
 interface SessionState {
   /** undefined until Firebase has answered whether someone is signed in. */
@@ -77,6 +120,9 @@ interface SessionState {
   config: RoomConfig;
   phase: Phase;
   round: Round | null;
+  announcement: Announcement | null;
+  /** Server clock minus this device's clock (ms): devices in a classroom don't all agree on the time. */
+  clockOffset: number;
   members: Record<string, Member>;
   /** Shown once on the entry screen (e.g. after being removed by the admin). */
   notice: string;
@@ -90,8 +136,16 @@ interface SessionState {
   chooseTeam: (teamId: string) => Promise<void>;
   leave: () => Promise<void>;
   clearRoom: () => Promise<void>;
-  /** Admin: deal a new round to every team (a random problem for now) and clear the last round's boards and memos. */
+  /** Admin: deal a new round to every team (as set in the config) and clear the last round's boards and memos. */
   startGame: () => Promise<void>;
+  /** Admin: show every team's answer (all teams must have handed in). */
+  reveal: () => Promise<void>;
+  saveConfig: (patch: Partial<RoomConfig>) => Promise<void>;
+  /** Admin: pop a message up on everyone's screen. */
+  announce: (text: string) => Promise<void>;
+  /** Admin: put a member in a team (or '' for none), or remove them from the room. */
+  moveMember: (uid: string, teamId: string) => Promise<void>;
+  kick: (uid: string) => Promise<void>;
   /** Admin: back to the lobby. */
   endGame: () => Promise<void>;
   clearMessages: () => void;
@@ -143,9 +197,14 @@ export const useSession = create<SessionState>()((set_, get_) => {
         const v = (snap.val() ?? {}) as Partial<Round> & { phase?: Phase };
         const ok = typeof v.round === 'number' && typeof v.problemId === 'string' && typeof v.seed === 'number' && Array.isArray(v.sizes);
         set_({
-          phase: v.phase === 'fixed' && ok ? 'fixed' : 'lobby',
-          round: ok ? { round: v.round!, problemId: v.problemId!, seed: v.seed!, sizes: v.sizes! } : null,
+          phase: ok && v.phase && PHASES.includes(v.phase) ? v.phase : 'lobby',
+          round: ok ? { round: v.round!, problemId: v.problemId!, seed: v.seed!, sizes: v.sizes!, caps: v.caps === true } : null,
         });
+      }),
+      onValue(ref(db, '.info/serverTimeOffset'), (snap) => set_({ clockOffset: Number(snap.val()) || 0 })),
+      onValue(ref(db, 'room/announce'), (snap) => {
+        const v = snap.val() as Announcement | null;
+        set_({ announcement: v && typeof v.text === 'string' && typeof v.at === 'number' ? v : null });
       }),
       onValue(
         ref(db, 'room/members'),
@@ -174,7 +233,7 @@ export const useSession = create<SessionState>()((set_, get_) => {
     stopRoom?.();
     stopRoom = null;
     wasMember = false;
-    set_({ user, isAdmin: !!user && user.email === ADMIN_EMAIL && user.emailVerified, loaded: false, members: {}, phase: 'lobby', round: null });
+    set_({ user, isAdmin: !!user && user.email === ADMIN_EMAIL && user.emailVerified, loaded: false, members: {}, phase: 'lobby', round: null, announcement: null });
     if (user) stopRoom = watchRoom(user);
   });
 
@@ -213,6 +272,8 @@ export const useSession = create<SessionState>()((set_, get_) => {
     config: DEFAULT_CONFIG,
     phase: 'lobby',
     round: null,
+    announcement: null,
+    clockOffset: 0,
     members: {},
     notice: '',
     error: '',
@@ -262,16 +323,31 @@ export const useSession = create<SessionState>()((set_, get_) => {
     clearRoom: () => run(async () => update(ref(db, 'room'), { seats: null, members: null })),
     startGame: () =>
       run(async () => {
-        const sizes = DEFAULT_SIZES;
-        const fits = PROBLEMS.filter((p) => p.source !== 'ai' && p.groups.length >= sizes.length && p.groups.every((g) => g.items.length >= Math.max(...sizes)));
-        const last = get_().round;
+        const { config, round: last } = get_();
+        const set = blockSetOf(config.blockSet);
+        const sizes = Array.from({ length: set.trays }, () => set.each);
+        const fits = dealableProblems();
+        const chosen = fits.find((p) => p.id === config.problem);
         const pool = fits.filter((p) => p.id !== last?.problemId);
-        const problem = (pool.length ? pool : fits)[Math.floor(Math.random() * (pool.length || fits.length))];
+        const problem = chosen ?? (pool.length ? pool : fits)[Math.floor(Math.random() * (pool.length || fits.length))];
         await update(ref(db, 'room'), {
-          state: { phase: 'fixed', round: (last?.round ?? 0) + 1, problemId: problem.id, seed: Math.floor(Math.random() * 2 ** 31), sizes },
+          state: { phase: 'fixed', round: (last?.round ?? 0) + 1, problemId: problem.id, seed: Math.floor(Math.random() * 2 ** 31), sizes, caps: true },
           boards: null,
           chats: null,
         });
+      }),
+    reveal: () => run(async () => set(ref(db, 'room/state/phase'), 'fixedReveal')),
+    saveConfig: (patch) => run(async () => update(ref(db, 'room/config'), patch)),
+    announce: (text) =>
+      run(async () => {
+        const body = text.trim().slice(0, 200);
+        if (body) await set(ref(db, 'room/announce'), { text: body, at: serverTimestamp() });
+      }),
+    moveMember: (uid, teamId) => run(async () => set(ref(db, `room/members/${uid}/team`), teamId || null)),
+    kick: (uid) =>
+      run(async () => {
+        const seat = get_().members[uid]?.seat;
+        await update(ref(db, 'room'), { [`members/${uid}`]: null, ...(seat === undefined ? {} : { [`seats/${seat}`]: null }) });
       }),
     endGame: () => run(async () => set(ref(db, 'room/state/phase'), 'lobby')),
     clearMessages: () => set_({ notice: '', error: '' }),

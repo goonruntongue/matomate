@@ -5,12 +5,15 @@
 //   labels/{tray}   = text
 //   holds/{block}   = uid            who is holding or throwing the block right now
 //   cursors/{uid}   = { x, y, h }    pointer over the stage (fractions of the stage) and the block carried
+//   comment         = text           the team's final comment: why it sorted this way
+//   submitted       = { by, at }     set once the team has handed its answer in (removed to take it back)
 //
 // Two people reaching for the same block: the first hold written wins (the rules refuse the second),
 // and the loser's block springs back. Two people typing the same label: the last one to stop typing wins.
 import { onDisconnect, onValue, ref, remove, serverTimestamp, set, update } from 'firebase/database';
 import { remoteSend, yieldBlock } from '../game/input';
 import { blocks, dom, drag, remoteCursors, remoteHolds } from '../game/runtime';
+import { create } from 'zustand';
 import { useGame } from '../state/store';
 import { db } from './firebase';
 
@@ -23,6 +26,52 @@ const LABEL_QUIET_MS = 1200;
 
 /** This player's pointer (page pixels), whether it is over the stage, and when it last moved. */
 export const myPointer = { x: 0, y: 0, inside: false, movedAt: 0 };
+
+export const COMMENT_MAX = 300;
+
+export interface Submitted {
+  by: string;
+  at: number;
+}
+
+/** The parts of the team's board that are not on the 3D stage: the final comment and whether it is handed in. */
+interface TeamBoardState {
+  comment: string;
+  submitted: Submitted | null;
+  error: string;
+  setComment(text: string): void;
+  /** Hand the team's answer in. The board is locked for everyone on the team until it is taken back. */
+  submit(): void;
+  /** Take the answer back (possible until the game master shows the results). */
+  takeBack(): void;
+}
+
+/** Set while a board is being synced: where it lives, and who this player is. */
+let active: { base: string; uid: string; touchComment(): void } | null = null;
+
+export const useTeamBoard = create<TeamBoardState>()((set_, get_) => ({
+  comment: '',
+  submitted: null,
+  error: '',
+  setComment: (text) => {
+    set_({ comment: text.slice(0, COMMENT_MAX) });
+    active?.touchComment();
+  },
+  submit: () => {
+    if (!active) return;
+    const { base, uid } = active;
+    set_({ error: '' });
+    // The comment goes with it, in case the last keystrokes haven't been sent yet.
+    update(ref(db, base), { comment: get_().comment.trim(), submitted: { by: uid, at: serverTimestamp() } }).catch(() =>
+      set_({ error: '提出できませんでした。もう一度お試しください。' }),
+    );
+  },
+  takeBack: () => {
+    if (!active) return;
+    set_({ error: '' });
+    remove(ref(db, `${active.base}/submitted`)).catch(() => set_({ error: '取り消せませんでした。結果発表が始まっているかもしれません。' }));
+  },
+}));
 
 interface RemoteAssign {
   tray: string;
@@ -44,7 +93,35 @@ export function startTeamSync(teamId: string, uid: string, round: number): () =>
   const unconfirmed = new Map<string, string | null>();
   const labelEditedAt = new Map<string, number>();
   const labelTimers = new Map<string, number>();
+  let remoteComment = '';
+  let commentEditedAt = 0;
+  let commentTimer = 0;
   let stopped = false;
+
+  function applyComment() {
+    if (useTeamBoard.getState().comment === remoteComment) return;
+    const quietUntil = commentEditedAt + LABEL_QUIET_MS;
+    const now = Date.now();
+    if (now < quietUntil) {
+      window.setTimeout(() => !stopped && applyComment(), quietUntil - now + 20);
+      return;
+    }
+    useTeamBoard.setState({ comment: remoteComment });
+  }
+  useTeamBoard.setState({ comment: '', submitted: null, error: '' });
+  active = {
+    base,
+    uid,
+    // This player typed in the comment box: send it once the typing pauses.
+    touchComment: () => {
+      commentEditedAt = Date.now();
+      window.clearTimeout(commentTimer);
+      commentTimer = window.setTimeout(() => {
+        const comment = useTeamBoard.getState().comment;
+        if (!stopped && comment !== remoteComment) void set(at('comment'), comment).catch(() => undefined);
+      }, LABEL_SEND_MS);
+    },
+  };
 
   const wanted = (itemId: string) => remoteAssign[itemId]?.tray ?? null;
   const busyHere = (itemId: string) => {
@@ -113,6 +190,14 @@ export function startTeamSync(teamId: string, uid: string, round: number): () =>
     onValue(at('labels'), (snap) => {
       remoteLabels = (snap.val() ?? {}) as Record<string, string>;
       applyLabels();
+    }),
+    onValue(at('comment'), (snap) => {
+      remoteComment = typeof snap.val() === 'string' ? (snap.val() as string) : '';
+      applyComment();
+    }),
+    onValue(at('submitted'), (snap) => {
+      const v = snap.val() as Submitted | null;
+      useTeamBoard.setState({ submitted: v && typeof v.by === 'string' ? { by: v.by, at: typeof v.at === 'number' ? v.at : Date.now() } : null });
     }),
     onValue(at('holds'), (snap) => {
       const holds = (snap.val() ?? {}) as Record<string, string>;
@@ -247,6 +332,9 @@ export function startTeamSync(teamId: string, uid: string, round: number): () =>
 
   return () => {
     stopped = true;
+    active = null;
+    window.clearTimeout(commentTimer);
+    useTeamBoard.setState({ comment: '', submitted: null, error: '' });
     offs.forEach((off) => off());
     unsubscribe();
     window.clearInterval(tick);

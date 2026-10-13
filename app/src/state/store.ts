@@ -248,6 +248,14 @@ function freshBoard(problemIndex: number, sizes: number[], showCapacity: boolean
   };
 }
 
+/** Team play: the blocks and tray ids a round deals, without touching the store (the game master's view). */
+export function dealTeamBoard(round: { problemId: string; seed: number; sizes: number[] }): { items: Item[]; trayIds: string[] } | null {
+  const problemIndex = PROBLEMS.findIndex((p) => p.id === round.problemId);
+  if (problemIndex < 0) return null;
+  const board = freshBoard(problemIndex, round.sizes, false, round.seed);
+  return { items: board.items, trayIds: board.trays.map((t) => t.id) };
+}
+
 function boardFor(mode: Mode, level: number, problemIndex: number, blockCount: number) {
   if (mode === 'level') {
     const def = levelDef(level);
@@ -276,7 +284,10 @@ export interface GameState {
   /** Team play (Mato mate): the board is shared with the team, see room/teamSync.ts. */
   team: boolean;
   /** Deal the round's board for team play. Returns false if this device doesn't have the problem. */
-  loadTeamBoard(round: { problemId: string; seed: number; sizes: number[] }): boolean;
+  loadTeamBoard(round: { problemId: string; seed: number; sizes: number[]; caps?: boolean }): boolean;
+  /** Team play: the team has handed in its answer (or the results are out), so nothing can be moved or renamed. */
+  locked: boolean;
+  setLocked(locked: boolean): void;
   mode: Mode;
   level: number;
   /** Stars collected toward the next level. */
@@ -396,10 +407,14 @@ export const useGame = create<GameState>()((set, get) => {
     ...initialProgress,
     ...boardFor(initialProgress.mode, initialProgress.level, initialTopic, initialBlockCount),
     team: false,
-    loadTeamBoard: ({ problemId, seed, sizes }) => {
+    locked: false,
+    setLocked: (locked) => {
+      if (get().locked !== locked) set({ locked, selected: locked ? null : get().selected });
+    },
+    loadTeamBoard: ({ problemId, seed, sizes, caps }) => {
       const problemIndex = PROBLEMS.findIndex((p) => p.id === problemId);
       if (problemIndex < 0) return false;
-      set({ team: true, mode: 'free', ...freshBoard(problemIndex, sizes, false, seed), hintOpen: false, tuningOpen: false, peek: null });
+      set({ team: true, mode: 'free', locked: false, ...freshBoard(problemIndex, sizes, !!caps, seed), hintOpen: false, tuningOpen: false, peek: null });
       return true;
     },
     muted: false,

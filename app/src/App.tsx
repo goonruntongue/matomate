@@ -20,7 +20,7 @@ import { CharacterGallery, CharacterReveal } from './ui/Characters';
 import { Tutorial } from './ui/Tutorial';
 import { Entry } from './room/Entry';
 import { useSession } from './room/session';
-import { TeamChat, TeamCursors, TeamHeader, TeamSession } from './room/TeamPlay';
+import { AnnouncementPopup, TeamChat, TeamCursors, TeamHeader, TeamSession, TeamWaiting } from './room/TeamPlay';
 
 // ?solo opens the single-player board that Mato mate is built from (for development).
 const SOLO = new URLSearchParams(location.search).has('solo');
@@ -84,7 +84,12 @@ export default function App() {
   // In the game: a member of a team while a round is on. Everyone else is on the entry screens.
   const playing = useSession((s) => s.phase !== 'lobby' && !!s.round && !!s.user && !!s.members[s.user.uid]?.team);
   if (SOLO) return <Board team={false} />;
-  return playing ? <Board team /> : <Entry />;
+  return (
+    <>
+      {playing ? <Board team /> : <Entry />}
+      <AnnouncementPopup />
+    </>
+  );
 }
 
 function Board({ team }: { team: boolean }) {
@@ -136,6 +141,7 @@ function Board({ team }: { team: boolean }) {
             </div>
           )}
           {team ? <TeamCursors /> : <Buddy />}
+          {team && <TeamWaiting />}
           <BriefCard />
           {!team && <HintPanel />}
           {!team && <ResultPanel />}
