@@ -6,6 +6,8 @@ import { EVERYDAY_EXTRA } from './topics-everyday';
 import { SERVICE_TOPICS } from './topics-service';
 import { WEB_EXTRA } from './topics-web';
 import { CURATED } from './topics-curated';
+import { MATOMATE_A } from './topics-matomate-a';
+import { MATOMATE_B } from './topics-matomate-b';
 import { LABEL_ALIASES } from './labelAliases';
 
 export interface Keyword {
@@ -25,6 +27,10 @@ export interface Problem {
   /** One step deeper than the generic guide: a lens that fits this topic. Never names the groups. */
   axisHint: string;
   groups: { label: string; items: Keyword[]; altLabels?: string[] }[];
+  /** Written for Mato mate's team game: the only ones the game master can deal. */
+  team?: boolean;
+  /** Team game, second half: other purposes these words could be sorted for (shown when the team asks). */
+  examples?: { user: string; scene: string; goal: string }[];
   /** Set on problems made by the AI (they join the list at runtime, see aiProblems.ts). */
   source?: 'ai';
   /** AI problems reach players only after Claude has reviewed and fixed them (since 2026-10-03). */
@@ -520,7 +526,9 @@ const BASE: Problem[] = [
 const TIER_ORDER: Tier[] = ['everyday', 'service', 'web'];
 
 /** All 30 topics, ordered everyday → service → web. */
-export const PROBLEMS: Problem[] = [...BASE, ...EVERYDAY_EXTRA, ...SERVICE_TOPICS, ...WEB_EXTRA, ...CURATED].sort(
+const TEAM_TOPICS = [...MATOMATE_A, ...MATOMATE_B];
+
+export const PROBLEMS: Problem[] = [...BASE, ...EVERYDAY_EXTRA, ...SERVICE_TOPICS, ...WEB_EXTRA, ...CURATED, ...TEAM_TOPICS].sort(
   (a, b) => TIER_ORDER.indexOf(a.tier) - TIER_ORDER.indexOf(b.tier),
 );
 
@@ -531,7 +539,7 @@ export const TIER_LABELS: Record<Tier, string> = {
 };
 
 // Problems that carry their alternative labels (topics-curated.ts) register them for label matching.
-for (const p of CURATED) {
+for (const p of [...CURATED, ...TEAM_TOPICS]) {
   LABEL_ALIASES[p.id] ??= Object.fromEntries(p.groups.map((g) => [g.label, g.altLabels ?? []]));
 }
 

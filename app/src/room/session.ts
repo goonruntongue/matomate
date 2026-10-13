@@ -69,9 +69,9 @@ export const MAX_TEAM_SIZE = 10;
 
 export const DEFAULT_CONFIG: RoomConfig = { teamCount: 5, teamSize: 4, blockSet: '9-3', problem: 'random', points: true, ranking: true, slots: 1 };
 
-/** Problems the game master can deal: built-in ones with enough groups and words for every block set. */
+/** Problems the game master can deal: the ones written for the team game (they can be sorted for several purposes). */
 export function dealableProblems() {
-  return PROBLEMS.filter((p) => p.source !== 'ai' && p.groups.length >= 5 && p.groups.every((g) => g.items.length >= 4));
+  return PROBLEMS.filter((p) => p.team && p.groups.length >= 5 && p.groups.every((g) => g.items.length >= 4));
 }
 
 export interface Team {

@@ -408,23 +408,57 @@ export function AnnouncementPopup() {
 export function TeamPurpose() {
   const purpose = useTeamBoard((s) => s.purpose);
   const locked = useGame((s) => s.locked);
+  const examples = useGame((s) => PROBLEMS[s.problemIndex]?.examples ?? []);
+  const [showExamples, setShowExamples] = useState(false);
   return (
-    <label className="team-comment team-purpose">
-      <span>
-        目的：だれが・どんなとき・何のために？
-        <small className="num">
-          {purpose.length}/{PURPOSE_MAX}
-        </small>
-      </span>
-      <textarea
-        value={purpose}
-        rows={2}
-        maxLength={PURPOSE_MAX}
-        readOnly={locked}
-        placeholder="例：一人暮らしを始める人が、引っ越しの前に、買う物を決めるため"
-        onChange={(e) => useTeamBoard.getState().setPurpose(e.target.value)}
-      />
-    </label>
+    <div className="team-purpose">
+      <label className="team-comment">
+        <span>
+          目的：だれが・どんなとき・何のために？
+          <small className="num">
+            {purpose.length}/{PURPOSE_MAX}
+          </small>
+        </span>
+        <textarea
+          value={purpose}
+          rows={2}
+          maxLength={PURPOSE_MAX}
+          readOnly={locked}
+          placeholder="チームで決めた目的を書きましょう"
+          onChange={(e) => useTeamBoard.getState().setPurpose(e.target.value)}
+        />
+      </label>
+      {/* Examples stay hidden until asked for: the team should try to think of its own purpose first. */}
+      {!locked && examples.length > 0 && (
+        <>
+          <button type="button" className="team-examples-toggle" aria-expanded={showExamples} onClick={() => setShowExamples(!showExamples)}>
+            {showExamples ? '例をとじる' : '思いつかないときは、例を見る'}
+          </button>
+          {showExamples && (
+            <ul className="team-examples">
+              {examples.map((ex) => {
+                const text = `${ex.user}が、${ex.scene}、${ex.goal}`;
+                return (
+                  <li key={text}>
+                    <span>{text}</span>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => {
+                        useTeamBoard.getState().setPurpose(text);
+                        setShowExamples(false);
+                      }}
+                    >
+                      これにする
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 

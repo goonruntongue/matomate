@@ -9,7 +9,7 @@
 - Firebase は**無料の Spark プランのまま**使う。従量課金（Blaze）に上げない。Firebase 上にプロジェクトやリソースを作る前にユーザーに確認する。
 - push 先は `https://github.com/goonruntongue/matomate.git`。
 - アバターの 3D モデルは `app/public/avatars/`（avatar1〜21.glb）。
-- お題は Claude が作って `app/src/data/` に入れる。作るときはローカルスキル `.claude/skills/label-drop-topic/SKILL.md` に従う。
+- お題は Claude が作って `app/src/data/` に入れる。チームのゲームで配るのは `topics-matomate-a.ts`・`topics-matomate-b.ts` の24問だけ（`team: true`。後半用の「別の目的の例」`examples` を持つ）。作るときはローカルスキル `.claude/skills/label-drop-topic/SKILL.md` に従い、`npm --prefix app run topics:check` を通す。
 
 ## よく使うコマンド
 

@@ -1763,3 +1763,12 @@ body.is-dragging .app.is-team .stage canvas { cursor: none !important; }
 .rv-total { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; font-size: 14px; color: var(--text-2); }
 .rv-total b { font-size: 24px; color: var(--text-1); }
 .rv-hearts { color: #ff6b8b; }
+
+/* Second half: example purposes, shown only when the team asks. */
+.team-purpose { display: grid; gap: 8px; }
+.team-purpose .team-comment { padding: 0; border: 0; background: none; }
+.team-examples-toggle { justify-self: start; padding: 2px 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
+.team-examples { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.team-examples li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line-soft); border-radius: var(--r-ctl); background: color-mix(in srgb, var(--bg-0) 45%, transparent); font-size: 12px; line-height: 1.6; }
+.team-examples li span { flex: 1; }
+.team-examples .btn { flex: none; white-space: nowrap; padding: 6px 10px; font-size: 12px; }
