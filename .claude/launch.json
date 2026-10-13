@@ -25,20 +25,6 @@
         "--strictPort"
       ],
       "port": 4173
-    },
-    {
-      "name": "api",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "--prefix",
-        "worker",
-        "run",
-        "dev",
-        "--",
-        "--port",
-        "8787"
-      ],
-      "port": 8787
     }
   ]
 }
