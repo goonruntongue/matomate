@@ -213,7 +213,7 @@ function message(err: unknown): string {
   if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return '';
   if (code === 'auth/popup-blocked') return 'ログインの画面が開けませんでした。ポップアップを許可して、もう一度押してください。';
   if (code === 'auth/operation-not-allowed' || code === 'auth/configuration-not-found' || code === 'auth/admin-restricted-operation') return 'このログイン方法は、まだ有効になっていません。';
-  if (code === 'auth/unauthorized-domain') return `このアドレス（${location.hostname}）からは Google でログインできません。https://matomate.web.app か、開発中は http://localhost で開いてください。`;
+  if (code === 'auth/unauthorized-domain') return `このアドレス（${location.hostname}）は、まだ Google ログインが許可されていません。管理者が Firebase の「承認済みドメイン」に追加すると使えます。それまでは「ゲストで入る」をお使いください。`;
   if (code === 'auth/network-request-failed') return 'ネットワークにつながりません。接続を確かめてください。';
   if (code === 'name-required') return 'ニックネームを入力してください。';
   if (code === 'team-full') return 'このチームは満員です。ほかのチームを選んでください。';

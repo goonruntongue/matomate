@@ -25,6 +25,7 @@ function Brand() {
     <header className="entry-brand">
       <h1>
         Mato <span>mate</span>
+        {EDITION === 'dx' && <small> DX</small>}
       </h1>
       <p>チームで仕分けて、名前を付けよう</p>
     </header>
