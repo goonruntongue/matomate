@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <!-- Label Drop app icon: a glass keyword block dropping into a glowing tray. Full-bleed (the OS applies the mask). -->
+  <!-- Mato mate app icon (pin edition): a glass keyword block dropping into a glowing tray, with two
+       teammates' pins standing in it. Full-bleed (the OS applies the mask). -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#12305f"/>
@@ -17,6 +18,17 @@
       <stop offset="0" stop-color="#9fb4ec"/>
       <stop offset="1" stop-color="#5f79c4"/>
     </linearGradient>
+    <!-- Pins: a ball on a cone, lit from the upper left. One gradient per colour. -->
+    <radialGradient id="pinPink" cx="0.35" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#ff9ccb"/>
+      <stop offset="0.55" stop-color="#ff4fa3"/>
+      <stop offset="1" stop-color="#c2256f"/>
+    </radialGradient>
+    <radialGradient id="pinGreen" cx="0.35" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#7fe3a6"/>
+      <stop offset="0.55" stop-color="#18a558"/>
+      <stop offset="1" stop-color="#0c6b37"/>
+    </radialGradient>
     <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
       <feGaussianBlur stdDeviation="14" result="b"/>
       <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
@@ -35,11 +47,18 @@
   <ellipse cx="512" cy="640" rx="420" ry="320" fill="url(#halo)"/>
 
   <!-- motion arc -->
-  <path d="M250 250 Q 420 150 500 420" fill="none" stroke="#45e5ff" stroke-width="14" stroke-linecap="round" stroke-dasharray="4 38" opacity="0.85" filter="url(#glow)"/>
+  <path d="M330 170 Q 470 120 512 400" fill="none" stroke="#45e5ff" stroke-width="14" stroke-linecap="round" stroke-dasharray="4 38" opacity="0.85" filter="url(#glow)"/>
 
   <!-- tray: back block, rim, front with glow strip -->
   <g filter="url(#soft)">
     <rect x="236" y="560" width="552" height="130" rx="40" fill="#163a78"/>
+    <!-- two teammates standing in the tray (their feet are behind its front) -->
+    <g stroke="#ffffff" stroke-opacity="0.85" stroke-width="8" stroke-linejoin="round">
+      <path d="M176 720 Q 250 748 324 720 L 280 516 Q 250 500 220 516 Z" fill="url(#pinPink)"/>
+      <circle cx="250" cy="452" r="66" fill="url(#pinPink)"/>
+      <path d="M700 720 Q 774 748 848 720 L 804 516 Q 774 500 744 516 Z" fill="url(#pinGreen)"/>
+      <circle cx="774" cy="452" r="66" fill="url(#pinGreen)"/>
+    </g>
     <path d="M196 640 H828 a44 44 0 0 1 44 44 V786 a70 70 0 0 1 -70 70 H222 a70 70 0 0 1 -70 -70 V684 a44 44 0 0 1 44 -44 Z" fill="url(#trayFace)" stroke="#45e5ff" stroke-width="10"/>
     <path d="M232 640 H792 V700 a26 26 0 0 1 -26 26 H258 a26 26 0 0 1 -26 -26 Z" fill="#081a3a" opacity="0.9"/>
   </g>
@@ -54,5 +73,5 @@
   </g>
 
   <!-- small sparkle -->
-  <path d="M770 250 l14 36 36 14 -36 14 -14 36 -14 -36 -36 -14 36 -14z" fill="#ffffff" opacity="0.9" filter="url(#glow)"/>
+  <path d="M660 190 l14 36 36 14 -36 14 -14 36 -14 -36 -36 -14 36 -14z" fill="#ffffff" opacity="0.9" filter="url(#glow)"/>
 </svg>
