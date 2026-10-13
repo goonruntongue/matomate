@@ -1346,3 +1346,103 @@ body.is-dragging .buddy-figure, .buddy.is-hidden .buddy-figure { pointer-events:
 
 /* A problem made by the AI (option A): a small tag next to its title. */
 .ai-made { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--accent); font-size: 11px; font-weight: 700; vertical-align: middle; letter-spacing: 0.04em; }
+
+
+/* ---------- Entry: sign in, profile, lobby (Mato mate) ---------- */
+.entry {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: radial-gradient(120% 80% at 50% 0%, var(--bg-2), var(--bg-0) 70%);
+}
+.entry-card {
+  width: min(680px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+}
+.entry-card.is-narrow { width: min(380px, 100%); }
+.entry-card.is-wide { width: min(1040px, 100%); }
+.entry-brand { text-align: center; margin-bottom: 6px; }
+.entry-brand h1 { margin: 0; font-family: var(--font-display); font-size: 40px; letter-spacing: -0.02em; }
+.entry-brand h1 span { color: var(--accent); }
+.entry-brand p { margin: 6px 0 0; color: var(--text-2); font-size: 14px; }
+.entry-title { margin: 0; font-size: 20px; line-height: 1.4; text-wrap: balance; }
+.entry-wide { padding: 12px; font-size: 15px; }
+.entry-note { margin: 0; color: var(--text-2); font-size: 12px; line-height: 1.6; }
+.entry-notice, .entry-error { margin: 0; padding: 10px 12px; border-radius: var(--r-ctl); font-size: 13px; line-height: 1.6; }
+.entry-notice { border: 1px solid var(--line); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.entry-error { border: 1px solid color-mix(in srgb, var(--danger) 60%, transparent); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+.entry-label { display: block; margin: 0 0 6px; font-size: 12px; font-weight: 700; color: var(--text-2); }
+.entry-input {
+  width: 100%;
+  padding: 10px 12px;
+  /* 16px: iOS zooms the page when a smaller input takes focus. */
+  font-size: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: color-mix(in srgb, var(--bg-0) 60%, transparent);
+  margin-bottom: 14px;
+}
+.entry-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.entry-actions .btn { padding: 10px 16px; min-height: 44px; }
+.btn-danger { border-color: color-mix(in srgb, var(--danger) 60%, transparent); color: var(--danger); background: transparent; }
+.btn-danger:hover:enabled { background: color-mix(in srgb, var(--danger) 14%, transparent); border-color: var(--danger); }
+
+.profile { display: grid; grid-template-columns: 220px 1fr; gap: 20px; align-items: start; }
+.profile-stage { position: relative; height: 260px; border-radius: var(--r-card); border: 1px solid var(--line-soft); background: color-mix(in srgb, var(--bg-0) 50%, transparent); display: grid; place-items: center; overflow: hidden; touch-action: none; }
+.profile-canvas { position: absolute !important; inset: 0; cursor: grab; }
+.profile-canvas:active { cursor: grabbing; }
+.avatar-face { display: block; width: 100%; height: 100%; object-fit: contain; }
+.avatar-face.is-big { width: 70%; height: 70%; }
+.avatar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.avatar-pick {
+  aspect-ratio: 1;
+  padding: 2px;
+  border: 2px solid var(--line-soft);
+  border-radius: var(--r-ctl);
+  background: color-mix(in srgb, var(--bg-0) 40%, transparent);
+  cursor: pointer;
+  transition: border-color var(--t-micro), transform var(--t-micro);
+}
+.avatar-pick:hover { border-color: var(--line); }
+.avatar-pick.is-on { border-color: var(--accent); box-shadow: var(--glow); transform: scale(1.04); }
+
+.lobby-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.lobby-count { flex: none; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; color: var(--text-2); }
+.team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.team-card { display: flex; flex-direction: column; gap: 8px; min-height: 150px; padding: 12px; border: 1px solid var(--line-soft); border-radius: var(--r-card); background: color-mix(in srgb, var(--bg-0) 40%, transparent); }
+.team-card.is-mine { border-color: var(--accent); box-shadow: var(--glow); }
+.team-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.team-head h3, .lobby-rest h3 { margin: 0; font-size: 15px; }
+.team-head .num { font-size: 12px; color: var(--text-2); }
+.team-join { margin-top: auto; min-height: 44px; }
+.member-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.member-list.is-row { flex-direction: row; flex-wrap: wrap; gap: 6px 12px; }
+.member { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; }
+.member .avatar-face { flex: none; width: 32px; height: 32px; }
+.member-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member.is-me .member-name { font-weight: 700; }
+.member.is-away .avatar-face, .member.is-away .member-name { opacity: 0.45; }
+.member-tag { flex: none; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 700; color: var(--bg-0); background: var(--accent); }
+.member-tag.is-away { color: var(--text-2); background: transparent; border: 1px solid var(--line); }
+:is([data-theme="pastel-rainbow"], [data-theme="kraft-paper"]) .member-tag:not(.is-away) { color: #fff; }
+.lobby-rest { display: flex; flex-direction: column; gap: 8px; }
+
+@media (max-width: 600px) {
+  .entry { place-items: start center; }
+  .entry-card { padding: 16px; }
+  .profile { grid-template-columns: 1fr; gap: 12px; }
+  .profile-stage { height: 180px; }
+  .avatar-pick { min-height: 40px; }
+  .entry-actions .btn { flex: 1; }
+  .team-grid { grid-template-columns: repeat(2, 1fr); }
+}

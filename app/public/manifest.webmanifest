@@ -1,7 +1,7 @@
 {
-  "name": "Label Drop — practice IA",
-  "short_name": "Label Drop",
-  "description": "キーワードを箱に投げ入れて名前を付ける、情報アーキテクチャ（グルーピングとラベリング）の練習ゲーム",
+  "name": "Mato mate",
+  "short_name": "Mato mate",
+  "description": "チームでキーワードを仕分けて名前を付ける、情報アーキテクチャ（グルーピングとラベリング）のグループワーク用ゲーム",
   "lang": "ja",
   "start_url": "./",
   "scope": "./",

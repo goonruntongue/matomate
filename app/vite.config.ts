@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from 'node:fs';
+import { mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { networkInterfaces } from 'node:os';
 import { join, relative } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
@@ -34,18 +34,43 @@ function publicFiles(dir: string, root = dir): string[] {
  */
 function precacheManifest(): Plugin {
   return {
-    name: 'label-drop-precache',
+    name: 'matomate-precache',
     apply: 'build',
     generateBundle(_, bundle) {
-      const shell = publicFiles('public').filter((f) => f !== 'sw.js' && !f.startsWith('characters/'));
+      const shell = publicFiles('public').filter((f) => f !== 'sw.js' && !f.startsWith('characters/') && !/^avatars\/[^/]+\.glb$/.test(f));
       const files = ['./', ...Object.keys(bundle), ...shell];
       this.emitFile({ type: 'asset', fileName: 'precache.json', source: JSON.stringify({ files }, null, 1) });
     },
   };
 }
 
+/** Dev only: saves the avatar pictures made by src/room/thumbs.ts (open the dev server with ?make-thumbs). */
+function avatarThumbs(): Plugin {
+  return {
+    name: 'matomate-avatar-thumbs',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/__thumbs', (req, res) => {
+        const name = (req.url ?? '').slice(1);
+        if (req.method !== 'POST' || !/^avatar\d{1,2}\.webp$/.test(name)) {
+          res.statusCode = 400;
+          res.end();
+          return;
+        }
+        const chunks: Buffer[] = [];
+        req.on('data', (c: Buffer) => chunks.push(c));
+        req.on('end', () => {
+          mkdirSync('public/avatars/thumbs', { recursive: true });
+          writeFileSync(join('public/avatars/thumbs', name), Buffer.concat(chunks));
+          res.end('ok');
+        });
+      });
+    },
+  };
+}
+
 export default defineConfig(({ command }) => ({
-  plugins: [react(), precacheManifest()],
+  plugins: [react(), precacheManifest(), avatarThumbs()],
   // Relative asset paths so the build works under any sub-path (GitHub Pages serves it at /label-drop/app/).
   base: './',
   // host: true listens on all interfaces (0.0.0.0), not just localhost, for same-LAN device testing.

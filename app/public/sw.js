@@ -1,11 +1,11 @@
-// Label Drop service worker: works offline, but never holds back an update.
+// Mato mate service worker: works offline, but never holds back an update.
 //  - Pages: network first (latest version when online), cached copy when offline.
 //  - Hashed build files (assets/*): cache first — their names change with every build.
 //  - Character models (characters/*.glb): cached the first time they are shown.
 //  - Google Fonts: stale-while-revalidate, so block labels render offline too.
-// Only caches named "label-drop-*" are ever touched; other apps on this origin keep theirs.
+// Only caches named "matomate-*" are ever touched; other apps on this origin keep theirs.
 // The list of files to keep is generated at build time (precache.json, see vite.config.ts).
-const CACHE = 'label-drop-v3';
+const CACHE = 'matomate-v3';
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 const SCOPE = new URL('./', self.location.href).href;
 
@@ -45,7 +45,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('label-drop-') && k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('matomate-') && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -102,7 +102,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   if (!request.url.startsWith(SCOPE)) return;
-  if (url.pathname.includes('/assets/') || url.pathname.includes('/characters/')) {
+  if (url.pathname.includes('/assets/') || url.pathname.includes('/characters/') || url.pathname.includes('/avatars/')) {
     event.respondWith(cacheFirst(request));
     return;
   }

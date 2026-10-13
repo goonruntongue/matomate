@@ -18,6 +18,11 @@ import { prefetchAi, tiersForLevel } from './aiProblems';
 import { Buddy } from './ui/Buddy';
 import { CharacterGallery, CharacterReveal } from './ui/Characters';
 import { Tutorial } from './ui/Tutorial';
+import { Entry } from './room/Entry';
+
+// The team game is not wired to the board yet: until it is, everyone stays on the entry screens.
+// ?solo opens the single-player board that Mato mate is being built from (for development).
+const SOLO = new URLSearchParams(location.search).has('solo');
 
 // Block textures are baked once, so every glyph subset must be loaded before the stage mounts.
 async function preloadFonts() {
@@ -66,6 +71,10 @@ function useKeyboard() {
 }
 
 export default function App() {
+  return SOLO ? <SoloApp /> : <Entry />;
+}
+
+function SoloApp() {
   const [ready, setReady] = useState(false);
   const announcement = useGame((s) => s.announcement);
   const theme = useGame((s) => s.theme);

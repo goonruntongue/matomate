@@ -2,7 +2,19 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import './styles.css';
 
-createRoot(document.getElementById('root')!).render(<App />);
+const root = createRoot(document.getElementById('root')!);
+if (import.meta.env.DEV && new URLSearchParams(location.search).has('make-thumbs')) {
+  // Dev tool: (re)make the avatar pictures. See src/room/thumbs.ts.
+  const lines: string[] = [];
+  void import('./room/thumbs').then(({ makeThumbs }) =>
+    makeThumbs((line) => {
+      lines.push(line);
+      root.render(<pre style={{ padding: 16 }}>{lines.join('\n')}</pre>);
+    }),
+  );
+} else {
+  root.render(<App />);
+}
 
 // No pinch zoom: the page is a game board, and a zoomed page slides sideways under the finger.
 // Safari in the browser ignores user-scalable=no, so its own pinch gesture events are cancelled too
