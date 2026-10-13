@@ -94,6 +94,14 @@ export function teamsOf(config: RoomConfig): Team[] {
 export type Phase = 'lobby' | 'fixed' | 'fixedReveal';
 const PHASES: Phase[] = ['lobby', 'fixed', 'fixedReveal'];
 
+/** What the results screen shows right now; set by the game master, the same for everybody. */
+export interface RevealView {
+  /** The model's labels and where the wrong blocks belong. */
+  showModel: boolean;
+  /** Team id being pointed at, or ''. */
+  focus: string;
+}
+
 /** The game master's message to everyone ("マスターの声"). */
 export interface Announcement {
   text: string;
@@ -120,6 +128,7 @@ interface SessionState {
   config: RoomConfig;
   phase: Phase;
   round: Round | null;
+  reveal: RevealView;
   announcement: Announcement | null;
   /** Server clock minus this device's clock (ms): devices in a classroom don't all agree on the time. */
   clockOffset: number;
@@ -139,7 +148,9 @@ interface SessionState {
   /** Admin: deal a new round to every team (as set in the config) and clear the last round's boards and memos. */
   startGame: () => Promise<void>;
   /** Admin: show every team's answer (all teams must have handed in). */
-  reveal: () => Promise<void>;
+  showResults: () => Promise<void>;
+  /** Admin: change what the results screen shows. */
+  setReveal: (patch: Partial<RevealView>) => Promise<void>;
   saveConfig: (patch: Partial<RoomConfig>) => Promise<void>;
   /** Admin: pop a message up on everyone's screen. */
   announce: (text: string) => Promise<void>;
@@ -194,11 +205,12 @@ export const useSession = create<SessionState>()((set_, get_) => {
     const offs = [
       onValue(ref(db, 'room/config'), (snap) => set_({ config: { ...DEFAULT_CONFIG, ...(snap.val() ?? {}) } })),
       onValue(ref(db, 'room/state'), (snap) => {
-        const v = (snap.val() ?? {}) as Partial<Round> & { phase?: Phase };
+        const v = (snap.val() ?? {}) as Partial<Round> & { phase?: Phase; showModel?: boolean; focus?: string };
         const ok = typeof v.round === 'number' && typeof v.problemId === 'string' && typeof v.seed === 'number' && Array.isArray(v.sizes);
         set_({
           phase: ok && v.phase && PHASES.includes(v.phase) ? v.phase : 'lobby',
           round: ok ? { round: v.round!, problemId: v.problemId!, seed: v.seed!, sizes: v.sizes!, caps: v.caps === true } : null,
+          reveal: { showModel: v.showModel === true, focus: typeof v.focus === 'string' ? v.focus : '' },
         });
       }),
       onValue(ref(db, '.info/serverTimeOffset'), (snap) => set_({ clockOffset: Number(snap.val()) || 0 })),
@@ -233,7 +245,7 @@ export const useSession = create<SessionState>()((set_, get_) => {
     stopRoom?.();
     stopRoom = null;
     wasMember = false;
-    set_({ user, isAdmin: !!user && user.email === ADMIN_EMAIL && user.emailVerified, loaded: false, members: {}, phase: 'lobby', round: null, announcement: null });
+    set_({ user, isAdmin: !!user && user.email === ADMIN_EMAIL && user.emailVerified, loaded: false, members: {}, phase: 'lobby', round: null, reveal: { showModel: false, focus: '' }, announcement: null });
     if (user) stopRoom = watchRoom(user);
   });
 
@@ -272,6 +284,7 @@ export const useSession = create<SessionState>()((set_, get_) => {
     config: DEFAULT_CONFIG,
     phase: 'lobby',
     round: null,
+    reveal: { showModel: false, focus: '' },
     announcement: null,
     clockOffset: 0,
     members: {},
@@ -336,7 +349,8 @@ export const useSession = create<SessionState>()((set_, get_) => {
           chats: null,
         });
       }),
-    reveal: () => run(async () => set(ref(db, 'room/state/phase'), 'fixedReveal')),
+    showResults: () => run(async () => update(ref(db, 'room/state'), { phase: 'fixedReveal', showModel: false, focus: '' })),
+    setReveal: (patch) => run(async () => update(ref(db, 'room/state'), patch)),
     saveConfig: (patch) => run(async () => update(ref(db, 'room/config'), patch)),
     announce: (text) =>
       run(async () => {

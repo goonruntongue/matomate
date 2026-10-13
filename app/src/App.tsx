@@ -19,6 +19,7 @@ import { Buddy } from './ui/Buddy';
 import { CharacterGallery, CharacterReveal } from './ui/Characters';
 import { Tutorial } from './ui/Tutorial';
 import { Entry } from './room/Entry';
+import { Reveal, useRevealUi } from './room/Reveal';
 import { useSession } from './room/session';
 import { AnnouncementPopup, TeamChat, TeamCursors, TeamHeader, TeamSession, TeamWaiting } from './room/TeamPlay';
 
@@ -82,11 +83,15 @@ function useKeyboard() {
 
 export default function App() {
   // In the game: a member of a team while a round is on. Everyone else is on the entry screens.
-  const playing = useSession((s) => s.phase !== 'lobby' && !!s.round && !!s.user && !!s.members[s.user.uid]?.team);
+  const playing = useSession((s) => s.phase === 'fixed' && !!s.round && !!s.user && !!s.members[s.user.uid]?.team);
+  // Results: one screen for everybody in the room (the game master can flip to the control panel).
+  const results = useSession((s) => s.phase === 'fixedReveal' && s.loaded && !!s.round && !!s.user && (s.isAdmin || !!s.members[s.user.uid]));
+  const panelOpen = useRevealUi((s) => s.panelOpen);
+  const isAdmin = useSession((s) => s.isAdmin);
   if (SOLO) return <Board team={false} />;
   return (
     <>
-      {playing ? <Board team /> : <Entry />}
+      {results && !(isAdmin && panelOpen) ? <Reveal /> : playing ? <Board team /> : <Entry />}
       <AnnouncementPopup />
     </>
   );

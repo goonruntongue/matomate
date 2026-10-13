@@ -360,20 +360,11 @@ export function TeamSubmit({ checks }: { checks: { ok: boolean; text: string }[]
 export function TeamWaiting() {
   const submitted = useTeamBoard((s) => !!s.submitted);
   const phase = useSession((s) => s.phase);
-  if (phase === 'fixed' && !submitted) return null;
+  if (phase !== 'fixed' || !submitted) return null;
   return (
     <div className="team-waiting" role="status">
-      {phase === 'fixed' ? (
-        <>
-          <b>提出しました</b>
-          <span>結果発表をお待ちください</span>
-        </>
-      ) : (
-        <>
-          <b>結果発表</b>
-          <span>全チームの答えを並べる画面は、準備中です</span>
-        </>
-      )}
+      <b>提出しました</b>
+      <span>結果発表をお待ちください</span>
     </div>
   );
 }

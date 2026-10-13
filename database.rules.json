@@ -93,7 +93,7 @@
             }
           }
         },
-        ".read": "auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true)"
+        ".read": "auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true) || (auth != null && root.child('room/state/phase').val() === 'fixedReveal')"
       },
       "chats": {
         ".write": "auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true)",

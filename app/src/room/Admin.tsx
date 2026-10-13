@@ -1,12 +1,12 @@
 // The game master's control panel: run the round, set the room up, and watch every team.
 // Only the admin sees it. Team memos are not here: nobody outside a team can read them.
-import { onValue, ref } from 'firebase/database';
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { PROBLEMS } from '../data/problems';
 import { dealTeamBoard, TRAY_GLYPHS, useGame } from '../state/store';
 import { THEMES } from '../theme/themes';
 import { avatarThumb } from './avatars';
-import { db } from './firebase';
+import { useBoards, type BoardData } from './boards';
+import { ModelAnswer, useRevealUi } from './Reveal';
 import {
   BLOCK_SETS,
   blockSetOf,
@@ -19,30 +19,6 @@ import {
   type Member,
   type Round,
 } from './session';
-
-/** One team's board as stored in the database for the current round. */
-interface BoardData {
-  assign?: Record<string, { tray: string; at: number }>;
-  labels?: Record<string, string>;
-  comment?: string;
-  submitted?: { by: string; at: number };
-}
-
-function useBoards(round: Round | null, playing: boolean): Record<string, BoardData> {
-  const [boards, setBoards] = useState<Record<string, BoardData>>({});
-  const key = round?.round;
-  useEffect(() => {
-    if (!playing || key === undefined) {
-      setBoards({});
-      return;
-    }
-    return onValue(ref(db, 'room/boards'), (snap) => {
-      const all = (snap.val() ?? {}) as Record<string, Record<string, BoardData>>;
-      setBoards(Object.fromEntries(Object.entries(all).map(([team, rounds]) => [team, rounds?.[`r${key}`] ?? {}])));
-    });
-  }, [key, playing]);
-  return boards;
-}
 
 function Confirm({ text, action, onYes, onNo }: { text: string; action: string; onYes: () => void; onNo: () => void }) {
   // Asked on the page itself: some browsers never show window.confirm.
@@ -87,33 +63,6 @@ function Toggle({ label, note, value, onChange, disabled }: { label: string; not
         {note && <small>{note}</small>}
       </span>
     </label>
-  );
-}
-
-/** Model answer of a round: the groups it deals, with the words taken from each. */
-function ModelAnswer({ round }: { round: Round }) {
-  const problem = PROBLEMS.find((p) => p.id === round.problemId);
-  const board = useMemo(() => dealTeamBoard(round), [round]);
-  if (!problem || !board) return null;
-  const groups = new Map<number, string[]>();
-  for (const item of board.items) {
-    const gi = Number(item.id.slice(problem.id.length + 1).split('-')[0]);
-    groups.set(gi, [...(groups.get(gi) ?? []), item.text]);
-  }
-  return (
-    <div className="admin-answer">
-      <p className="admin-brief">
-        <b>{problem.title}</b>：{problem.brief.user}が、{problem.brief.scene}、{problem.brief.goal}
-      </p>
-      <ul>
-        {[...groups.entries()].map(([gi, words]) => (
-          <li key={gi}>
-            <b>{problem.groups[gi].label}</b>
-            <span>{words.join('、')}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }
 
@@ -194,7 +143,7 @@ export function Admin() {
   const round = useSession((s) => s.round);
   const busy = useSession((s) => s.busy);
   const error = useSession((s) => s.error);
-  const { saveConfig, startGame, reveal, endGame, clearRoom, announce, signOut } = useSession.getState();
+  const { saveConfig, startGame, showResults, endGame, clearRoom, announce, signOut } = useSession.getState();
   const playing = phase !== 'lobby';
   const boards = useBoards(round, playing);
   const [showAnswers, setShowAnswers] = useState(true);
@@ -269,14 +218,23 @@ export function Admin() {
             </button>
           )}
           {phase === 'fixed' && (
-            <button type="button" className="btn btn-primary" disabled={busy || !allIn} onClick={() => void reveal()}>
+            <button type="button" className="btn btn-primary" disabled={busy || !allIn} onClick={() => {
+                useRevealUi.getState().setPanelOpen(false);
+                void showResults();
+              }}
+            >
               結果発表
             </button>
           )}
           {phase === 'fixedReveal' && (
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void startGame()}>
-              次のゲームを始める
-            </button>
+            <>
+              <button type="button" className="btn btn-primary" onClick={() => useRevealUi.getState().setPanelOpen(false)}>
+                結果発表の画面へ戻る
+              </button>
+              <button type="button" className="btn" disabled={busy} onClick={() => void startGame()}>
+                次のゲームを始める
+              </button>
+            </>
           )}
           {playing && (
             <button type="button" className="btn" disabled={busy} onClick={() => setConfirming('end')}>
@@ -466,6 +424,9 @@ export function Admin() {
         {showModel &&
           (preview ? (
             <>
+              <p className="admin-brief">
+                <b>{PROBLEMS.find((p) => p.id === preview.problemId)?.title}</b>
+              </p>
               <ModelAnswer round={preview} />
               {!playing && <p className="entry-note">どの言葉が配られるかは、ゲームを始めるときに決まります（これは一例です）。</p>}
             </>
