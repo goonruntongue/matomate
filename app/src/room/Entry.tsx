@@ -2,7 +2,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { SafeBoundary } from '../ui/SafeBoundary';
 import { AVATAR_COUNT, avatarThumb, randomAvatar } from './avatars';
-import { MAX_MEMBERS, NAME_MAX, teamsOf, useSession, type Member } from './session';
+import { MAX_MEMBERS, NAME_MAX, teamsOf, useSession, validName, type Member } from './session';
 
 const AvatarViewer = lazy(() => import('./AvatarViewer'));
 
@@ -95,11 +95,16 @@ function Profile({ current, onDone }: { current?: Member; onDone?: () => void })
             className="entry-input"
             value={name}
             maxLength={NAME_MAX}
-            placeholder="ゲスト"
+            placeholder="自分の名前やあだ名"
+            required
+            aria-describedby="nickname-note"
             autoComplete="off"
             enterKeyHint="done"
             onChange={(e) => setName(e.target.value)}
           />
+          <p className="entry-note profile-name-note" id="nickname-note">
+            {name.trim() === 'ゲスト' ? '「ゲスト」のままでは入れません。ほかの名前にしてください。' : 'チームの人に見える名前です。入力すると入室できます。'}
+          </p>
           <p className="entry-label" id="avatar-label">
             アバター
           </p>
@@ -130,7 +135,7 @@ function Profile({ current, onDone }: { current?: Member; onDone?: () => void })
             ログイン画面へ戻る
           </button>
         )}
-        <button type="submit" className="btn btn-primary" disabled={busy}>
+        <button type="submit" className="btn btn-primary" disabled={busy || !validName(name)}>
           {current ? '保存する' : '入室する'}
         </button>
       </div>
@@ -160,6 +165,7 @@ function Lobby() {
   const signOut = useSession((s) => s.signOut);
   const clearRoom = useSession((s) => s.clearRoom);
   const [editing, setEditing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const me: Member | undefined = members[user.uid];
   const list = Object.entries(members).sort(([, a], [, b]) => (a.joinedAt ?? 0) - (b.joinedAt ?? 0));
   const teams = teamsOf(config);
@@ -230,19 +236,34 @@ function Lobby() {
             ログアウト
           </button>
         )}
-        {isAdmin && (
-          <button
-            type="button"
-            className="btn btn-danger"
-            disabled={busy || list.length === 0}
-            onClick={() => {
-              if (window.confirm('参加者を全員、退室させます。よろしいですか？')) void clearRoom();
-            }}
-          >
+        {isAdmin && !confirming && (
+          <button type="button" className="btn btn-danger" disabled={busy || list.length === 0} onClick={() => setConfirming(true)}>
             全員を退室させる
           </button>
         )}
       </div>
+      {/* Asked on the page itself: some browsers (in-app ones, home-screen apps) never show window.confirm. */}
+      {isAdmin && confirming && (
+        <div className="entry-confirm" role="alertdialog" aria-label="全員を退室させる確認">
+          <p>参加者を全員（{list.length}人）退室させます。よろしいですか？</p>
+          <div className="entry-actions">
+            <button type="button" className="btn" autoFocus onClick={() => setConfirming(false)}>
+              やめる
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              disabled={busy}
+              onClick={() => {
+                setConfirming(false);
+                void clearRoom();
+              }}
+            >
+              全員を退室させる
+            </button>
+          </div>
+        </div>
+      )}
       {isAdmin && <p className="entry-note">管理者としてログインしています。管理者は参加者の人数には入りません。</p>}
     </div>
   );

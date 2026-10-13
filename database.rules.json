@@ -29,7 +29,7 @@
         "$uid": {
           ".write": "auth != null && auth.uid === $uid && (!newData.exists() || newData.parent().parent().child('seats').child('' + newData.child('seat').val()).val() === auth.uid)",
           ".validate": "newData.hasChildren(['name', 'avatar', 'seat'])",
-          "name": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20" },
+          "name": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20 && newData.val() !== 'ゲスト'" },
           "avatar": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 21" },
           "seat": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 29 && (!data.exists() || data.val() === newData.val())" },
           "team": {

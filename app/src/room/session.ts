@@ -16,6 +16,12 @@ import { ADMIN_EMAIL, auth, db } from './firebase';
 export const MAX_MEMBERS = 30;
 export const NAME_MAX = 20;
 
+/** A nickname the person chose themselves: not empty, and not just "ゲスト". */
+export function validName(name: string): boolean {
+  const n = name.trim();
+  return n.length > 0 && n !== 'ゲスト';
+}
+
 export interface Member {
   name: string;
   avatar: number;
@@ -79,6 +85,7 @@ function message(err: unknown): string {
   if (code === 'auth/popup-blocked') return 'ログインの画面が開けませんでした。ポップアップを許可して、もう一度押してください。';
   if (code === 'auth/operation-not-allowed' || code === 'auth/configuration-not-found' || code === 'auth/admin-restricted-operation') return 'このログイン方法は、まだ有効になっていません。';
   if (code === 'auth/network-request-failed') return 'ネットワークにつながりません。接続を確かめてください。';
+  if (code === 'name-required') return 'ニックネームを入力してください。';
   if (code === 'team-full') return 'このチームは満員です。ほかのチームを選んでください。';
   if (code === 'PERMISSION_DENIED' || /permission_denied/i.test(String((err as Error)?.message))) return '操作が許可されませんでした。';
   return 'うまくいきませんでした。もう一度お試しください。';
@@ -147,7 +154,8 @@ export const useSession = create<SessionState>()((set_, get_) => {
   async function writeMember(user: User, name: string, avatar: number) {
     const uid = user.uid;
     const existing = get_().members[uid];
-    const profile = { name: name.trim().slice(0, NAME_MAX) || 'ゲスト', avatar };
+    if (!validName(name)) throw Object.assign(new Error('name'), { code: 'name-required' });
+    const profile = { name: name.trim().slice(0, NAME_MAX), avatar };
     if (existing) {
       await update(ref(db, `room/members/${uid}`), profile);
       return;

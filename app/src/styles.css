@@ -1390,8 +1390,10 @@ body.is-dragging .buddy-figure, .buddy.is-hidden .buddy-figure { pointer-events:
   border: 1px solid var(--line);
   border-radius: var(--r-ctl);
   background: color-mix(in srgb, var(--bg-0) 60%, transparent);
-  margin-bottom: 14px;
 }
+.profile-name-note { margin: 6px 0 14px; }
+.entry-confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border: 1px solid color-mix(in srgb, var(--danger) 60%, transparent); border-radius: var(--r-ctl); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.entry-confirm p { margin: 0; font-size: 14px; }
 .entry-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .entry-actions .btn { padding: 10px 16px; min-height: 44px; }
 .btn-danger { border-color: color-mix(in srgb, var(--danger) 60%, transparent); color: var(--danger); background: transparent; }
