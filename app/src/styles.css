@@ -1719,3 +1719,47 @@ body.is-dragging .app.is-team .stage canvas { cursor: none !important; }
   .rv-head h2 { font-size: 20px; }
   .rv-grid { grid-template-columns: 1fr; }
 }
+
+
+/* ---------- Second half: purpose, trash, hearts ---------- */
+.team-purpose { padding: 10px 12px; border: 1px solid var(--accent); border-radius: var(--r-card); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.trash-card { --tray: var(--text-3); }
+/* On the stage, at the left edge above the boxes: drop a block here, or select one and tap. */
+.team-trash {
+  position: absolute;
+  left: 10px;
+  top: 46%;
+  z-index: 25;
+  display: grid;
+  justify-items: center;
+  gap: 0;
+  min-width: 60px;
+  padding: 8px 10px;
+  border: 2px dashed var(--line);
+  border-radius: var(--r-card);
+  background: var(--glass);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: border-color var(--t-micro), transform var(--t-micro), box-shadow var(--t-micro);
+}
+.team-trash span { font-size: 22px; line-height: 1.2; }
+.team-trash b { font-size: 13px; color: var(--text-1); }
+.team-trash small { font-size: 10px; }
+.team-trash.is-armed { border-color: var(--accent); }
+.team-trash.is-target { border-style: solid; border-color: var(--danger); transform: scale(1.12); box-shadow: 0 0 20px color-mix(in srgb, var(--danger) 45%, transparent); }
+.team-trash.is-full { opacity: 0.55; }
+@media (max-width: 640px) { .team-trash { left: 4px; min-width: 50px; padding: 6px; } .team-trash span { font-size: 18px; } }
+
+.rv-pick { display: block; width: 100%; padding: 6px 8px; margin: -6px -8px; box-sizing: content-box; border: 0; border-radius: var(--r-ctl); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.rv-pick:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.rv-purpose { margin: 0; padding: 10px 12px; border: 1px solid var(--accent); border-radius: var(--r-ctl); background: color-mix(in srgb, var(--accent) 9%, transparent); font-size: 15px; font-weight: 700; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.rv-purpose b { display: block; font-size: 11px; font-weight: 700; color: var(--accent); }
+.rv-vote-note { margin: 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--glass); font-size: 14px; font-weight: 700; }
+.rv-voted { font-size: 13px; color: var(--text-2); white-space: nowrap; }
+.rv-heart { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 48px; padding: 10px; border: 2px solid var(--line); border-radius: var(--r-ctl); background: color-mix(in srgb, var(--bg-0) 45%, transparent); color: var(--text-1); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; transition: border-color var(--t-micro), background var(--t-micro), transform var(--t-micro); }
+.rv-heart span { font-size: 20px; color: #ff6b8b; }
+.rv-heart:hover { border-color: #ff6b8b; }
+.rv-heart.is-on { border-color: #ff6b8b; background: color-mix(in srgb, #ff6b8b 18%, transparent); transform: scale(1.02); }
+.rv-total { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; font-size: 14px; color: var(--text-2); }
+.rv-total b { font-size: 24px; color: var(--text-1); }
+.rv-hearts { color: #ff6b8b; }

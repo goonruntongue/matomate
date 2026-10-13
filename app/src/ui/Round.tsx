@@ -8,6 +8,7 @@ import { TRAY_GLYPHS, useGame } from '../state/store';
 import { THEMES } from '../theme/themes';
 import { dom } from '../game/runtime';
 import { useDialog } from './useDialog';
+import { useTeamBoard } from '../room/teamSync';
 
 function Stars({ value, max = 3, size }: { value: number; max?: number; size?: 'lg' }) {
   return (
@@ -30,8 +31,10 @@ export function BriefingOverlay() {
   const itemCount = useGame((s) => s.items.length);
   const trays = useGame((s) => s.trays);
   const team = useGame((s) => s.team);
+  const free = useGame((s) => s.free);
   const dialog = useDialog<HTMLDivElement>(() => useGame.getState().dismissBriefing(), open);
   if (!open) return null;
+  if (free) return <FreeBriefing dialogRef={dialog} title={PROBLEMS[problemIndex].title} itemCount={itemCount} trayCount={trays.length} />;
   const problem = PROBLEMS[problemIndex];
   const def = levelDef(level);
   const caps = trays.map((t) => t.capacity).filter((c): c is number => c !== undefined);
@@ -94,6 +97,43 @@ export function BriefingOverlay() {
   );
 }
 
+/** Second half: no brief from the problem. The team decides who it is sorting for. */
+function FreeBriefing(props: { dialogRef: React.RefObject<HTMLDivElement | null>; title: string; itemCount: number; trayCount: number }) {
+  return (
+    <div className="briefing" role="dialog" aria-modal="true" aria-label="後半：自由課題" ref={props.dialogRef}>
+      <div className="briefing-card">
+        <p className="kicker">TEAM PLAY ・ 後半（自由課題）</p>
+        <h2>目的を自分たちで決めて、分け直そう</h2>
+        <p className="briefing-tip">
+          前半と同じ「{props.title}」のブロックです。今度は<b>だれが・どんなとき・何のために</b>使うのかを、チームで決めます。目的が変わると、分け方も名前も変わります。
+        </p>
+        <p className="briefing-task">
+          キーワード{props.itemCount}個 → {props.trayCount}つの箱。正解はありません
+        </p>
+        <ul className="briefing-controls">
+          <li>
+            まず、右の<b>「目的」</b>の欄に、チームで決めた目的を書く
+          </li>
+          <li>
+            その目的では要らないブロックは、<b>2個まで捨てられます</b>（左の 🗑️ へ）
+          </li>
+        </ul>
+        <button
+          type="button"
+          className="btn btn-primary"
+          autoFocus
+          onClick={() => {
+            useGame.getState().dismissBriefing();
+            audio.tick();
+          }}
+        >
+          はじめる
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const BRIEF_COLLAPSED_KEY = 'practice-ia:brief-collapsed';
 
 /** Collapsed by default on narrow screens (the brief was just read; blocks need the room). Remembered per device. */
@@ -117,9 +157,11 @@ export function BriefCard() {
   const mode = useGame((s) => s.mode);
   const level = useGame((s) => s.level);
   const [collapsed, setCollapsed] = useState(initialCollapsed);
+  const free = useGame((s) => s.free);
+  const purpose = useTeamBoard((s) => s.purpose);
   if (open) return null;
   const problem = PROBLEMS[problemIndex];
-  const tag = `${mode === 'level' ? `LV ${level} ・ お題` : 'お題'}${problem.source === 'ai' ? ' ・ AI 作問・監修済' : ''}`;
+  const tag = free ? '後半 ・ チームの目的' : `${mode === 'level' ? `LV ${level} ・ お題` : 'お題'}${problem.source === 'ai' ? ' ・ AI 作問・監修済' : ''}`;
   const toggle = () => {
     const next = !collapsed;
     setCollapsed(next);
@@ -158,9 +200,13 @@ export function BriefCard() {
       </div>
       <div className="brief-card-body">
         <b>{problem.title}</b>
-        <span>
-          {problem.brief.user}が、{problem.brief.scene}
-        </span>
+        {free ? (
+          <span>{purpose.trim() || '（まだ決まっていません。右の「目的」の欄に書きましょう）'}</span>
+        ) : (
+          <span>
+            {problem.brief.user}が、{problem.brief.scene}
+          </span>
+        )}
       </div>
     </div>
   );

@@ -4,9 +4,9 @@ import { assistAll, assistSome, SOME_COUNT } from '../game/assist';
 import { sendTo } from '../game/input';
 import { levelDef } from '../game/levels';
 import { labelIssues } from '../hints/labelRules';
-import { TRAY_GLYPHS, useGame, type Tray } from '../state/store';
+import { TRASH_ID, TRASH_MAX, TRAY_GLYPHS, useGame, type Tray } from '../state/store';
 import { THEMES } from '../theme/themes';
-import { TeamSubmit } from '../room/TeamPlay';
+import { TeamPurpose, TeamSubmit } from '../room/TeamPlay';
 
 export function Inventory() {
   const trays = useGame((s) => s.trays);
@@ -16,6 +16,7 @@ export function Inventory() {
   const mode = useGame((s) => s.mode);
   const level = useGame((s) => s.level);
   const team = useGame((s) => s.team);
+  const free = useGame((s) => s.free);
   const { select } = useGame.getState();
   const unsorted = useMemo(() => items.filter((item) => !assign[item.id]), [items, assign]);
 
@@ -30,16 +31,20 @@ export function Inventory() {
           <p className="pane-sub">
             {mode === 'level'
               ? levelDef(level).goal
-              : `キーワード${items.length}個 → ${trays.length}箱（1箱あたり約${Math.round(items.length / trays.length)}個）`}
+              : free
+                ? `キーワード${items.length}個 → ${trays.length}箱。要らないブロックは${TRASH_MAX}個まで捨てられます`
+                : `キーワード${items.length}個 → ${trays.length}箱（1箱あたり約${Math.round(items.length / trays.length)}個）`}
           </p>
         </div>
       </div>
+      {free && <TeamPurpose />}
       <SubmitBar />
       {!team && <AssistBar />}
       <div className="pane-list">
         {trays.map((tray, i) => (
           <TrayCard key={tray.id} tray={tray} index={i} />
         ))}
+        {free && <TrashCard />}
       </div>
       <details className="unsorted">
         <summary>
@@ -171,6 +176,60 @@ function AssistBar() {
         </button>
       </div>
       <p className="assist-note">ペンディングエリアから、模範の分け方でブロックが箱へ飛び込みます。使ったことは記録されます。</p>
+    </section>
+  );
+}
+
+/** Free task: the blocks the team threw away. They can be taken back out at any time. */
+function TrashCard() {
+  const items = useGame((s) => s.items);
+  const assign = useGame((s) => s.assign);
+  const isTarget = useGame((s) => s.dragTarget === TRASH_ID);
+  const locked = useGame((s) => s.locked);
+  const contents = items.filter((item) => assign[item.id] === TRASH_ID);
+  const full = contents.length >= TRASH_MAX;
+  return (
+    <section
+      className={`tray-card trash-card${isTarget ? ' is-target' : ''}`}
+      data-tray-id={TRASH_ID}
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest('button')) return;
+        const selected = useGame.getState().selected;
+        if (selected) sendTo(selected, TRASH_ID);
+      }}
+    >
+      <header className="tray-card-head">
+        <span className="tray-glyph" aria-hidden="true">
+          🗑️
+        </span>
+        <span className="tray-index">捨てたブロック</span>
+        <span className={`tray-count num${full ? ' is-full' : ''}`}>
+          {String(contents.length).padStart(2, '0')}
+          <small>/{String(TRASH_MAX).padStart(2, '0')}</small>
+        </span>
+      </header>
+      <div className="chips">
+        {contents.length ? (
+          contents.map((item) => (
+            <button
+              type="button"
+              key={item.id}
+              className="chip"
+              title={`${item.desc}（クリックでペンディングエリアに戻す）`}
+              disabled={locked}
+              onClick={() => {
+                useGame.getState().moveItem(item.id, null);
+                audio.drop();
+              }}
+            >
+              {item.text}
+              {!locked && <span aria-hidden="true">×</span>}
+            </button>
+          ))
+        ) : (
+          <p className="empty">この目的では要らないブロックを、{TRASH_MAX}個まで捨てられます</p>
+        )}
+      </div>
     </section>
   );
 }

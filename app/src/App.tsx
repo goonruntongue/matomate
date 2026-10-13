@@ -20,8 +20,8 @@ import { CharacterGallery, CharacterReveal } from './ui/Characters';
 import { Tutorial } from './ui/Tutorial';
 import { Entry } from './room/Entry';
 import { Reveal, useRevealUi } from './room/Reveal';
-import { useSession } from './room/session';
-import { AnnouncementPopup, TeamChat, TeamCursors, TeamHeader, TeamSession, TeamWaiting } from './room/TeamPlay';
+import { isPlaying, isResults, useSession } from './room/session';
+import { AnnouncementPopup, TeamChat, TeamCursors, TeamHeader, TeamSession, TeamTrash, TeamWaiting } from './room/TeamPlay';
 
 // ?solo opens the single-player board that Mato mate is built from (for development).
 const SOLO = new URLSearchParams(location.search).has('solo');
@@ -83,9 +83,9 @@ function useKeyboard() {
 
 export default function App() {
   // In the game: a member of a team while a round is on. Everyone else is on the entry screens.
-  const playing = useSession((s) => s.phase === 'fixed' && !!s.round && !!s.user && !!s.members[s.user.uid]?.team);
+  const playing = useSession((s) => isPlaying(s.phase) && !!s.round && !!s.user && !!s.members[s.user.uid]?.team);
   // Results: one screen for everybody in the room (the game master can flip to the control panel).
-  const results = useSession((s) => s.phase === 'fixedReveal' && s.loaded && !!s.round && !!s.user && (s.isAdmin || !!s.members[s.user.uid]));
+  const results = useSession((s) => isResults(s.phase) && s.loaded && !!s.round && !!s.user && (s.isAdmin || !!s.members[s.user.uid]));
   const panelOpen = useRevealUi((s) => s.panelOpen);
   const isAdmin = useSession((s) => s.isAdmin);
   if (SOLO) return <Board team={false} />;
@@ -147,6 +147,7 @@ function Board({ team }: { team: boolean }) {
           )}
           {team ? <TeamCursors /> : <Buddy />}
           {team && <TeamWaiting />}
+          {team && <TeamTrash />}
           <BriefCard />
           {!team && <HintPanel />}
           {!team && <ResultPanel />}

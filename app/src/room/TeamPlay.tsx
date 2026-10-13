@@ -3,14 +3,14 @@ import { limitToLast, onValue, push, query, ref, remove, serverTimestamp, set } 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { PROBLEMS } from '../data/problems';
-import { yieldBlock } from '../game/input';
+import { sendTo, yieldBlock } from '../game/input';
 import { dom, drag } from '../game/runtime';
-import { useGame } from '../state/store';
+import { TRASH_ID, TRASH_MAX, useGame } from '../state/store';
 import { Icon } from '../ui/Header';
 import { avatarThumb } from './avatars';
 import { db } from './firebase';
-import { teamsOf, useSession } from './session';
-import { COMMENT_MAX, CURSOR_IDLE_MS, myPointer, startTeamSync, useTeamBoard } from './teamSync';
+import { boardKey, isPlaying, teamsOf, useSession } from './session';
+import { COMMENT_MAX, CURSOR_IDLE_MS, myPointer, PURPOSE_MAX, startTeamSync, useTeamBoard } from './teamSync';
 
 const CHAT_MAX = 500;
 const CHAT_KEEP = 100;
@@ -46,11 +46,13 @@ export function TeamSession() {
   const { uid, me } = useMe();
   const round = useSession((s) => s.round);
   const teamId = me?.team;
-  const key = round ? `${round.round}|${round.problemId}|${round.seed}|${round.sizes.join(',')}` : '';
+  // The second half deals the same blocks onto a board of its own.
+  const free = useSession((s) => s.phase === 'free');
+  const key = round ? `${round.round}|${round.problemId}|${round.seed}|${round.sizes.join(',')}|${free}` : '';
   useLayoutEffect(() => {
     if (!round || !teamId || !uid) return;
-    if (!useGame.getState().loadTeamBoard(round)) return;
-    const stopSync = startTeamSync(teamId, uid, round.round);
+    if (!useGame.getState().loadTeamBoard(round, free)) return;
+    const stopSync = startTeamSync(teamId, uid, boardKey(round.round, free));
     // The memo is the team's own: nobody else (not even the game master) can read it.
     const stopChat = onValue(query(ref(db, `room/chats/${teamId}`), limitToLast(CHAT_KEEP)), (snap) => {
       const messages: ChatMessage[] = [];
@@ -73,7 +75,7 @@ export function TeamSession() {
   // Handed in, or the results are out: nobody on the team can move or rename anything.
   const submitted = useTeamBoard((s) => !!s.submitted);
   const phase = useSession((s) => s.phase);
-  const locked = submitted || phase !== 'fixed';
+  const locked = submitted || !isPlaying(phase);
   useEffect(() => {
     if (locked && drag.active && drag.id) yieldBlock(drag.id);
     useGame.getState().setLocked(locked);
@@ -284,8 +286,12 @@ export function TeamSubmit({ checks }: { checks: { ok: boolean; text: string }[]
   const submitted = useTeamBoard((s) => s.submitted);
   const error = useTeamBoard((s) => s.error);
   const { setComment, submit, takeBack } = useTeamBoard.getState();
+  // Second half: the team must also have said what it is sorting for.
+  const free = useGame((s) => s.free);
+  const purpose = useTeamBoard((s) => s.purpose);
+  if (free) checks = [{ ok: !!purpose.trim(), text: purpose.trim() ? '目的を決めた' : '目的を決める（いちばん上の欄）' }, ...checks];
   const ready = checks.every((c) => c.ok);
-  const revealed = phase !== 'fixed';
+  const revealed = !isPlaying(phase);
   const commentBox = (
     <label className="team-comment">
       <span>
@@ -360,7 +366,7 @@ export function TeamSubmit({ checks }: { checks: { ok: boolean; text: string }[]
 export function TeamWaiting() {
   const submitted = useTeamBoard((s) => !!s.submitted);
   const phase = useSession((s) => s.phase);
-  if (phase !== 'fixed' || !submitted) return null;
+  if (!isPlaying(phase) || !submitted) return null;
   return (
     <div className="team-waiting" role="status">
       <b>提出しました</b>
@@ -392,5 +398,64 @@ export function AnnouncementPopup() {
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Second half: the purpose the team sorts for, in the team's own words. Shared like the labels:
+ * anyone on the team can type, and it can be changed until the answer is handed in.
+ */
+export function TeamPurpose() {
+  const purpose = useTeamBoard((s) => s.purpose);
+  const locked = useGame((s) => s.locked);
+  return (
+    <label className="team-comment team-purpose">
+      <span>
+        目的：だれが・どんなとき・何のために？
+        <small className="num">
+          {purpose.length}/{PURPOSE_MAX}
+        </small>
+      </span>
+      <textarea
+        value={purpose}
+        rows={2}
+        maxLength={PURPOSE_MAX}
+        readOnly={locked}
+        placeholder="例：一人暮らしを始める人が、引っ越しの前に、買う物を決めるため"
+        onChange={(e) => useTeamBoard.getState().setPurpose(e.target.value)}
+      />
+    </label>
+  );
+}
+
+/**
+ * Second half, on the stage: where blocks are thrown away. Drop a block on it, or select a block and tap it.
+ * What is inside is listed (and can be taken back) in the tray list.
+ */
+export function TeamTrash() {
+  const free = useGame((s) => s.free);
+  const count = useGame((s) => s.items.reduce((n, item) => (s.assign[item.id] === TRASH_ID ? n + 1 : n), 0));
+  const isTarget = useGame((s) => s.dragTarget === TRASH_ID);
+  const armed = useGame((s) => s.selected !== null);
+  const locked = useGame((s) => s.locked);
+  if (!free || locked) return null;
+  const full = count >= TRASH_MAX;
+  return (
+    <button
+      type="button"
+      className={`team-trash${isTarget ? ' is-target' : ''}${armed && !full ? ' is-armed' : ''}${full ? ' is-full' : ''}`}
+      data-tray-id={TRASH_ID}
+      aria-label={`要らないブロックを捨てる（${count}／${TRASH_MAX}個）`}
+      onClick={() => {
+        const selected = useGame.getState().selected;
+        if (selected) sendTo(selected, TRASH_ID);
+      }}
+    >
+      <span aria-hidden="true">🗑️</span>
+      <b className="num">
+        {count}/{TRASH_MAX}
+      </b>
+      <small>{full ? 'いっぱい' : '捨てる'}</small>
+    </button>
   );
 }

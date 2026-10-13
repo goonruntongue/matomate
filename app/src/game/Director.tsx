@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import * as audio from '../audio';
-import { useGame } from '../state/store';
+import { TRASH_ID, useGame } from '../state/store';
 import { decideTarget, velocity } from './input';
 import { buddyCornerPx, keepoutFromPx, layoutField, metrics, slotLocal, slotRotation, trayWidth, trayX, type Keepout } from './layout';
 import { rainbowHex, THEMES } from '../theme/themes';
@@ -290,7 +290,13 @@ export function Director() {
       } else if (b.phase === 'flying' && b.flight) {
         const f = b.flight;
         const trt = trays.get(f.to);
-        if (!trt?.group) {
+        if (f.to === TRASH_ID) {
+          // The trash is not a tray on the stage: the block is simply thrown away.
+          b.phase = 'rest';
+          b.flight = null;
+          useGame.getState().moveItem(item.id, TRASH_ID);
+          audio.drop();
+        } else if (!trt?.group) {
           b.phase = 'rest';
           b.flight = null;
         } else {
@@ -361,6 +367,10 @@ export function Director() {
         g.quaternion.slerp(tmp.q2, ease(10));
         tintTarget = 1;
         tintColor = trt.color;
+      } else if (trayId === TRASH_ID) {
+        // Thrown away: out of sight until someone takes it back out of the trash.
+        targetScale = 0.001;
+        b.vel.set(0, 0, 0);
       } else {
         const A = still ? 0 : tun.floatAmp;
         const sp = tun.floatSpeed;

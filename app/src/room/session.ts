@@ -90,9 +90,24 @@ export function teamsOf(config: RoomConfig): Team[] {
  * lobby: picking teams.
  * fixed: the first half (a set purpose, with a model answer).
  * fixedReveal: the game master is showing every team's answer to the first half.
+ * free: the second half (each team sets its own purpose and sorts the same blocks again; nothing is right or wrong).
+ * freeReveal: every team's answer to the second half is on screen, and everyone gives one heart.
+ * score: the hearts are counted and, when points are on, each team's total is shown.
  */
-export type Phase = 'lobby' | 'fixed' | 'fixedReveal';
-const PHASES: Phase[] = ['lobby', 'fixed', 'fixedReveal'];
+export type Phase = 'lobby' | 'fixed' | 'fixedReveal' | 'free' | 'freeReveal' | 'score';
+const PHASES: Phase[] = ['lobby', 'fixed', 'fixedReveal', 'free', 'freeReveal', 'score'];
+
+/** Teams are sorting. */
+export const isPlaying = (phase: Phase) => phase === 'fixed' || phase === 'free';
+/** Everyone is looking at the shared results screen. */
+export const isResults = (phase: Phase) => phase === 'fixedReveal' || phase === 'freeReveal' || phase === 'score';
+/** The second half, and everything after it. */
+export const isFreeHalf = (phase: Phase) => phase === 'free' || phase === 'freeReveal' || phase === 'score';
+
+/** Where a round's boards live under room/boards/{team}/: the first half, or the second half's (first) purpose. */
+export function boardKey(round: number, free: boolean): string {
+  return free ? `r${round}f1` : `r${round}`;
+}
 
 /** What the results screen shows right now; set by the game master, the same for everybody. */
 export interface RevealView {
@@ -149,6 +164,10 @@ interface SessionState {
   startGame: () => Promise<void>;
   /** Admin: show every team's answer (all teams must have handed in). */
   showResults: () => Promise<void>;
+  /** Admin: start the second half (same blocks, each team's own purpose). */
+  startFree: () => Promise<void>;
+  /** Admin: close the voting and show the hearts (and the points, when those are on). */
+  showScore: () => Promise<void>;
   /** Admin: change what the results screen shows. */
   setReveal: (patch: Partial<RevealView>) => Promise<void>;
   saveConfig: (patch: Partial<RoomConfig>) => Promise<void>;
@@ -347,9 +366,12 @@ export const useSession = create<SessionState>()((set_, get_) => {
           state: { phase: 'fixed', round: (last?.round ?? 0) + 1, problemId: problem.id, seed: Math.floor(Math.random() * 2 ** 31), sizes, caps: true },
           boards: null,
           chats: null,
+          votes: null,
         });
       }),
-    showResults: () => run(async () => update(ref(db, 'room/state'), { phase: 'fixedReveal', showModel: false, focus: '' })),
+    showResults: () => run(async () => update(ref(db, 'room/state'), { phase: get_().phase === 'free' ? 'freeReveal' : 'fixedReveal', showModel: false, focus: '' })),
+    startFree: () => run(async () => update(ref(db, 'room/state'), { phase: 'free', showModel: false, focus: '' })),
+    showScore: () => run(async () => update(ref(db, 'room/state'), { phase: 'score', focus: '' })),
     setReveal: (patch) => run(async () => update(ref(db, 'room/state'), patch)),
     saveConfig: (patch) => run(async () => update(ref(db, 'room/config'), patch)),
     announce: (text) =>

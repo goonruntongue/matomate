@@ -2,7 +2,7 @@
 // Only the admin sees it. Team memos are not here: nobody outside a team can read them.
 import { useMemo, useState, type CSSProperties } from 'react';
 import { PROBLEMS } from '../data/problems';
-import { dealTeamBoard, TRAY_GLYPHS, useGame } from '../state/store';
+import { dealTeamBoard, TRASH_ID, TRAY_GLYPHS, useGame } from '../state/store';
 import { THEMES } from '../theme/themes';
 import { avatarThumb } from './avatars';
 import { useBoards, type BoardData } from './boards';
@@ -11,6 +11,8 @@ import {
   BLOCK_SETS,
   blockSetOf,
   dealableProblems,
+  isFreeHalf,
+  isPlaying,
   MAX_MEMBERS,
   MAX_TEAM_SIZE,
   MAX_TEAMS,
@@ -73,8 +75,15 @@ function TeamAnswer({ round, board }: { round: Round; board: BoardData }) {
   const inTray = (trayId: string) =>
     dealt.items.filter((item) => board.assign?.[item.id]?.tray === trayId).sort((a, b) => (board.assign![a.id].at ?? 0) - (board.assign![b.id].at ?? 0));
   const pending = dealt.items.filter((item) => !board.assign?.[item.id]);
+  const trash = inTray(TRASH_ID);
   return (
     <div className="admin-board">
+      {board.purpose !== undefined && (
+        <p className="admin-comment">
+          <b>目的：</b>
+          {board.purpose || '（まだ決まっていません）'}
+        </p>
+      )}
       {dealt.trayIds.map((trayId, i) => (
         <div key={trayId} className="admin-tray" style={{ '--tray': colors[i] } as CSSProperties}>
           <b>
@@ -83,6 +92,12 @@ function TeamAnswer({ round, board }: { round: Round; board: BoardData }) {
           <span>{inTray(trayId).map((item) => item.text).join('、') || '—'}</span>
         </div>
       ))}
+      {trash.length > 0 && (
+        <div className="admin-tray is-pending">
+          <b>🗑️ 捨てた</b>
+          <span>{trash.map((item) => item.text).join('、')}</span>
+        </div>
+      )}
       {pending.length > 0 && (
         <div className="admin-tray is-pending">
           <b>まだ入れていない</b>
@@ -143,9 +158,10 @@ export function Admin() {
   const round = useSession((s) => s.round);
   const busy = useSession((s) => s.busy);
   const error = useSession((s) => s.error);
-  const { saveConfig, startGame, showResults, endGame, clearRoom, announce, signOut } = useSession.getState();
+  const { saveConfig, startGame, showResults, startFree, endGame, clearRoom, announce, signOut } = useSession.getState();
   const playing = phase !== 'lobby';
-  const boards = useBoards(round, playing);
+  const sorting = isPlaying(phase);
+  const boards = useBoards(round, playing, isFreeHalf(phase));
   const [showAnswers, setShowAnswers] = useState(true);
   const [showModel, setShowModel] = useState(false);
   const [confirming, setConfirming] = useState<'clear' | 'end' | null>(null);
@@ -158,7 +174,7 @@ export function Admin() {
   const unassigned = list.filter(([, m]) => !teams.some((t) => t.id === m.team));
   const active = teams.filter((t) => list.some(([, m]) => m.team === t.id));
   const waiting = active.filter((t) => !boards[t.id]?.submitted);
-  const allIn = phase === 'fixed' && active.length > 0 && waiting.length === 0;
+  const allIn = sorting && active.length > 0 && waiting.length === 0;
   const set = blockSetOf(config.blockSet);
   const problems = useMemo(() => dealableProblems(), []);
   const total = round ? round.sizes.reduce((a, b) => a + b, 0) : 0;
@@ -184,7 +200,9 @@ export function Admin() {
         <div>
           <p className="kicker">GAME MASTER</p>
           <h2 className="entry-title">
-            {phase === 'lobby' ? 'ロビー：チーム分けと設定' : phase === 'fixed' ? `前半（固定課題）：${PROBLEMS.find((p) => p.id === round?.problemId)?.title ?? ''}` : '前半の結果発表'}
+            {phase === 'lobby'
+              ? 'ロビー：チーム分けと設定'
+              : `${{ fixed: '前半（固定課題）', fixedReveal: '前半の結果発表', free: '後半（自由課題）', freeReveal: '後半の結果発表・投票', score: '結果：ハートとポイント' }[phase]}：${PROBLEMS.find((p) => p.id === round?.problemId)?.title ?? ''}`}
           </h2>
         </div>
         <span className="lobby-count num" aria-label={`参加者 ${list.length}人（上限 ${MAX_MEMBERS}人）`}>
@@ -204,7 +222,7 @@ export function Admin() {
             全チームの回答が出そろいました。結果発表ができます。
           </p>
         )}
-        {phase === 'fixed' && !allIn && (
+        {sorting && !allIn && (
           <p className="entry-note">
             提出済み {active.length - waiting.length} / {active.length} チーム{waiting.length > 0 && `（まだ：${waiting.map((t) => t.name).join('、')}）`}
             。全チームが提出すると、結果発表ができます。
@@ -217,7 +235,7 @@ export function Admin() {
               ゲームを始める
             </button>
           )}
-          {phase === 'fixed' && (
+          {sorting && (
             <button type="button" className="btn btn-primary" disabled={busy || !allIn} onClick={() => {
                 useRevealUi.getState().setPanelOpen(false);
                 void showResults();
@@ -226,11 +244,16 @@ export function Admin() {
               結果発表
             </button>
           )}
-          {phase === 'fixedReveal' && (
+          {!sorting && playing && (
             <>
               <button type="button" className="btn btn-primary" onClick={() => useRevealUi.getState().setPanelOpen(false)}>
                 結果発表の画面へ戻る
               </button>
+              {phase === 'fixedReveal' && (
+                <button type="button" className="btn" disabled={busy} onClick={() => void startFree()}>
+                  後半（自由課題）を始める
+                </button>
+              )}
               <button type="button" className="btn" disabled={busy} onClick={() => void startGame()}>
                 次のゲームを始める
               </button>
@@ -386,7 +409,7 @@ export function Admin() {
           </label>
           <Stepper label="自由課題の目的の数" value={config.slots} min={1} max={3} disabled={busy} onChange={(slots) => void saveConfig({ slots })} />
         </div>
-        <p className="entry-note">チーム数 × 人数は、{MAX_MEMBERS}人までです。</p>
+        <p className="entry-note">チーム数 × 人数は、{MAX_MEMBERS}人までです。「自由課題の目的の数」は、まだ1つで動きます（2つ以上にしても、今は変わりません）。</p>
         <div className="admin-toggles">
           <Toggle label="点数をつける" note="正解1つ・ハート1つを1点として数えます" value={config.points} disabled={busy} onChange={(points) => void saveConfig({ points })} />
           <Toggle label="順位をつける" value={config.ranking} disabled={busy || !config.points} onChange={(ranking) => void saveConfig({ ranking })} />

@@ -1,7 +1,7 @@
 import type { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import * as audio from '../audio';
-import { useGame } from '../state/store';
+import { TRASH_ID, TRASH_MAX, useGame } from '../state/store';
 import { blocks, dom, drag, HOLD_Z, remoteHolds, trayScreen, view, type BlockRT } from './runtime';
 
 const TAP_MOVE_PX = 7;
@@ -72,7 +72,8 @@ function aimTarget(x: number, y: number, vx: number, vy: number, maxDeg: number)
  */
 export function canAccept(trayId: string, itemId: string): boolean {
   const game = useGame.getState();
-  const cap = game.trays.find((tray) => tray.id === trayId)?.capacity;
+  if (trayId === TRASH_ID && !game.free) return false;
+  const cap = trayId === TRASH_ID ? TRASH_MAX : game.trays.find((tray) => tray.id === trayId)?.capacity;
   if (cap === undefined) return true;
   let used = 0;
   for (const item of game.items) {

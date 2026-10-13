@@ -5,6 +5,7 @@
 //   labels/{tray}   = text
 //   holds/{block}   = uid            who is holding or throwing the block right now
 //   cursors/{uid}   = { x, y, h }    pointer over the stage (fractions of the stage) and the block carried
+//   purpose         = text           second half: the purpose the team chose to sort for
 //   comment         = text           the team's final comment: why it sorted this way
 //   submitted       = { by, at }     set once the team has handed its answer in (removed to take it back)
 //
@@ -28,6 +29,7 @@ const LABEL_QUIET_MS = 1200;
 export const myPointer = { x: 0, y: 0, inside: false, movedAt: 0 };
 
 export const COMMENT_MAX = 300;
+export const PURPOSE_MAX = 120;
 
 export interface Submitted {
   by: string;
@@ -36,6 +38,9 @@ export interface Submitted {
 
 /** The parts of the team's board that are not on the 3D stage: the final comment and whether it is handed in. */
 interface TeamBoardState {
+  /** Second half only: who the sorting is for, when, and what for, in the team's own words. */
+  purpose: string;
+  setPurpose(text: string): void;
   comment: string;
   submitted: Submitted | null;
   error: string;
@@ -47,22 +52,27 @@ interface TeamBoardState {
 }
 
 /** Set while a board is being synced: where it lives, and who this player is. */
-let active: { base: string; uid: string; touchComment(): void } | null = null;
+let active: { base: string; uid: string; touch(field: 'comment' | 'purpose'): void } | null = null;
 
 export const useTeamBoard = create<TeamBoardState>()((set_, get_) => ({
+  purpose: '',
+  setPurpose: (text) => {
+    set_({ purpose: text.slice(0, PURPOSE_MAX) });
+    active?.touch('purpose');
+  },
   comment: '',
   submitted: null,
   error: '',
   setComment: (text) => {
     set_({ comment: text.slice(0, COMMENT_MAX) });
-    active?.touchComment();
+    active?.touch('comment');
   },
   submit: () => {
     if (!active) return;
     const { base, uid } = active;
     set_({ error: '' });
     // The comment goes with it, in case the last keystrokes haven't been sent yet.
-    update(ref(db, base), { comment: get_().comment.trim(), submitted: { by: uid, at: serverTimestamp() } }).catch(() =>
+    update(ref(db, base), { comment: get_().comment.trim(), purpose: get_().purpose.trim(), submitted: { by: uid, at: serverTimestamp() } }).catch(() =>
       set_({ error: '提出できませんでした。もう一度お試しください。' }),
     );
   },
@@ -78,8 +88,9 @@ interface RemoteAssign {
   at: number;
 }
 
-export function startTeamSync(teamId: string, uid: string, round: number): () => void {
-  const base = `room/boards/${teamId}/r${round}`;
+/** `key` names the board within the team: see boardKey() in session.ts. */
+export function startTeamSync(teamId: string, uid: string, key: string): () => void {
+  const base = `room/boards/${teamId}/${key}`;
   const at = (path: string) => ref(db, `${base}/${path}`);
   let remoteAssign: Record<string, RemoteAssign> = {};
   let remoteLabels: Record<string, string> = {};
@@ -93,32 +104,37 @@ export function startTeamSync(teamId: string, uid: string, round: number): () =>
   const unconfirmed = new Map<string, string | null>();
   const labelEditedAt = new Map<string, number>();
   const labelTimers = new Map<string, number>();
-  let remoteComment = '';
-  let commentEditedAt = 0;
-  let commentTimer = 0;
+  // The team's texts (final comment, purpose): typed by anyone, the last one to stop typing wins.
+  const texts = {
+    comment: { remote: '', editedAt: 0, timer: 0 },
+    purpose: { remote: '', editedAt: 0, timer: 0 },
+  };
+  type TextField = keyof typeof texts;
   let stopped = false;
 
-  function applyComment() {
-    if (useTeamBoard.getState().comment === remoteComment) return;
-    const quietUntil = commentEditedAt + LABEL_QUIET_MS;
+  function applyText(field: TextField) {
+    const t = texts[field];
+    if (useTeamBoard.getState()[field] === t.remote) return;
+    const quietUntil = t.editedAt + LABEL_QUIET_MS;
     const now = Date.now();
     if (now < quietUntil) {
-      window.setTimeout(() => !stopped && applyComment(), quietUntil - now + 20);
+      window.setTimeout(() => !stopped && applyText(field), quietUntil - now + 20);
       return;
     }
-    useTeamBoard.setState({ comment: remoteComment });
+    useTeamBoard.setState({ [field]: t.remote });
   }
-  useTeamBoard.setState({ comment: '', submitted: null, error: '' });
+  useTeamBoard.setState({ comment: '', purpose: '', submitted: null, error: '' });
   active = {
     base,
     uid,
-    // This player typed in the comment box: send it once the typing pauses.
-    touchComment: () => {
-      commentEditedAt = Date.now();
-      window.clearTimeout(commentTimer);
-      commentTimer = window.setTimeout(() => {
-        const comment = useTeamBoard.getState().comment;
-        if (!stopped && comment !== remoteComment) void set(at('comment'), comment).catch(() => undefined);
+    // This player typed in the box: send it once the typing pauses.
+    touch: (field) => {
+      const t = texts[field];
+      t.editedAt = Date.now();
+      window.clearTimeout(t.timer);
+      t.timer = window.setTimeout(() => {
+        const text = useTeamBoard.getState()[field];
+        if (!stopped && text !== t.remote) void set(at(field), text).catch(() => undefined);
       }, LABEL_SEND_MS);
     },
   };
@@ -191,10 +207,12 @@ export function startTeamSync(teamId: string, uid: string, round: number): () =>
       remoteLabels = (snap.val() ?? {}) as Record<string, string>;
       applyLabels();
     }),
-    onValue(at('comment'), (snap) => {
-      remoteComment = typeof snap.val() === 'string' ? (snap.val() as string) : '';
-      applyComment();
-    }),
+    ...(['comment', 'purpose'] as const).map((field) =>
+      onValue(at(field), (snap) => {
+        texts[field].remote = typeof snap.val() === 'string' ? (snap.val() as string) : '';
+        applyText(field);
+      }),
+    ),
     onValue(at('submitted'), (snap) => {
       const v = snap.val() as Submitted | null;
       useTeamBoard.setState({ submitted: v && typeof v.by === 'string' ? { by: v.by, at: typeof v.at === 'number' ? v.at : Date.now() } : null });
@@ -333,8 +351,9 @@ export function startTeamSync(teamId: string, uid: string, round: number): () =>
   return () => {
     stopped = true;
     active = null;
-    window.clearTimeout(commentTimer);
-    useTeamBoard.setState({ comment: '', submitted: null, error: '' });
+    window.clearTimeout(texts.comment.timer);
+    window.clearTimeout(texts.purpose.timer);
+    useTeamBoard.setState({ comment: '', purpose: '', submitted: null, error: '' });
     offs.forEach((off) => off());
     unsubscribe();
     window.clearInterval(tick);

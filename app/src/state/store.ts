@@ -6,6 +6,9 @@ import { balancedSizes, levelDef, MAX_LEVEL, sizesForLevel, STARS_TO_LEVEL_UP } 
 import { THEMES, type ThemeId } from '../theme/themes';
 
 export const TRAY_GLYPHS = ['◆', '●', '▲', '■', '★'] as const;
+/** Team play, second half: blocks the team decides it doesn't need go here instead of a tray. */
+export const TRASH_ID = 'trash';
+export const TRASH_MAX = 2;
 export const MIN_TRAYS = 3;
 export const MAX_TRAYS = 5;
 
@@ -284,7 +287,10 @@ export interface GameState {
   /** Team play (Mato mate): the board is shared with the team, see room/teamSync.ts. */
   team: boolean;
   /** Deal the round's board for team play. Returns false if this device doesn't have the problem. */
-  loadTeamBoard(round: { problemId: string; seed: number; sizes: number[]; caps?: boolean }): boolean;
+  loadTeamBoard(round: { problemId: string; seed: number; sizes: number[]; caps?: boolean }, free?: boolean): boolean;
+  /** Team play, second half (free task): the team sets its own purpose, nothing is right or wrong, and up to
+   *  TRASH_MAX blocks may be thrown away. */
+  free: boolean;
   /** Team play: the team has handed in its answer (or the results are out), so nothing can be moved or renamed. */
   locked: boolean;
   setLocked(locked: boolean): void;
@@ -411,10 +417,12 @@ export const useGame = create<GameState>()((set, get) => {
     setLocked: (locked) => {
       if (get().locked !== locked) set({ locked, selected: locked ? null : get().selected });
     },
-    loadTeamBoard: ({ problemId, seed, sizes, caps }) => {
+    free: false,
+    loadTeamBoard: ({ problemId, seed, sizes, caps }, free = false) => {
       const problemIndex = PROBLEMS.findIndex((p) => p.id === problemId);
       if (problemIndex < 0) return false;
-      set({ team: true, mode: 'free', locked: false, ...freshBoard(problemIndex, sizes, !!caps, seed), hintOpen: false, tuningOpen: false, peek: null });
+      // The second half deals the same blocks again; its boxes take any number (the team's own grouping).
+      set({ team: true, free, mode: 'free', locked: false, ...freshBoard(problemIndex, sizes, !!caps && !free, seed), hintOpen: false, tuningOpen: false, peek: null });
       return true;
     },
     muted: false,
@@ -593,7 +601,7 @@ export const useGame = create<GameState>()((set, get) => {
         assignedAt: { ...assignedAt, [itemId]: ++moveSeq },
         history: record ? [...history, { itemId, from, to }] : history,
         selected: selected === itemId ? null : selected,
-        announcement: to === null ? `${text} をペンディングエリアに戻しました` : `${text} をトレイ${trayIndex + 1}に入れました`,
+        announcement: to === null ? `${text} をペンディングエリアに戻しました` : to === TRASH_ID ? `${text} を捨てました` : `${text} をトレイ${trayIndex + 1}に入れました`,
       });
     },
 
