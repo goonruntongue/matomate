@@ -1444,5 +1444,7 @@ body.is-dragging .buddy-figure, .buddy.is-hidden .buddy-figure { pointer-events:
   .profile-stage { height: 180px; }
   .avatar-pick { min-height: 40px; }
   .entry-actions .btn { flex: 1; }
-  .team-grid { grid-template-columns: repeat(2, 1fr); }
+  .team-grid { grid-template-columns: 1fr; }
+  .team-card { min-height: 0; }
+  .team-card .member-list { flex-direction: row; flex-wrap: wrap; gap: 6px 12px; }
 }

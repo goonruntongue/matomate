@@ -154,8 +154,7 @@ export const useSession = create<SessionState>()((set_, get_) => {
     }
     // Take the first free seat. If someone else takes it at the same moment the write is refused: try the next.
     const seats = ((await get(ref(db, 'room/seats'))).val() ?? {}) as Record<string, string>;
-    const mine = Object.entries(seats).find(([, owner]) => owner === uid)?.[0];
-    const free = mine !== undefined ? [Number(mine)] : Array.from({ length: MAX_MEMBERS }, (_, i) => i).filter((i) => !seats[i]);
+    const free = Array.from({ length: MAX_MEMBERS }, (_, i) => i).filter((i) => !seats[i]);
     if (!free.length) throw Object.assign(new Error('full'), { full: true });
     let lastError: unknown;
     for (const seat of free.slice(0, 5)) {

@@ -20,7 +20,7 @@
         ".read": "auth != null",
         ".write": "auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true)",
         "$n": {
-          ".write": "auth != null && $n.matches(/^([0-9]|[12][0-9])$/) && ((!data.exists() && newData.val() === auth.uid) || (data.val() === auth.uid && !newData.exists()))"
+          ".write": "auth != null && $n.matches(/^([0-9]|[12][0-9])$/) && ((!data.exists() && newData.val() === auth.uid && !root.child('room/members').child(auth.uid).exists() && '' + newData.parent().parent().child('members').child(auth.uid).child('seat').val() === $n) || (data.val() === auth.uid && !newData.exists() && !newData.parent().parent().child('members').child(auth.uid).exists()))"
         }
       },
       "members": {
@@ -31,7 +31,7 @@
           ".validate": "newData.hasChildren(['name', 'avatar', 'seat'])",
           "name": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20" },
           "avatar": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 21" },
-          "seat": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 29" },
+          "seat": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 29 && (!data.exists() || data.val() === newData.val())" },
           "team": {
             ".validate": "newData.isString() && newData.val().matches(/^t[0-9]{1,2}$/) && (newData.val() === data.val() || !root.child('room/state/phase').exists() || root.child('room/state/phase').val() === 'lobby' || (auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true)"
           },
