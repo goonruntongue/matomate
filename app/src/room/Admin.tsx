@@ -7,6 +7,7 @@ import { THEMES } from '../theme/themes';
 import { Face } from './Face';
 import { slotUsed, useBoards, useFreeTeams, type BoardData } from './boards';
 import { ModelAnswer, useRevealUi } from './Reveal';
+import { ShareButton } from './Share';
 import {
   BLOCK_SETS,
   blockSetOf,
@@ -208,9 +209,12 @@ export function Admin() {
               : `${{ fixed: '前半（固定課題）', fixedReveal: '前半の結果発表', free: '後半（自由課題）', freeReveal: '後半の結果発表・投票', score: '結果：ハートとポイント' }[phase]}：${PROBLEMS.find((p) => p.id === round?.problemId)?.title ?? ''}`}
           </h2>
         </div>
-        <span className="lobby-count num" aria-label={`参加者 ${list.length}人（上限 ${MAX_MEMBERS}人）`}>
-          {list.length} / {MAX_MEMBERS}
-        </span>
+        <div className="lobby-tools">
+          <ShareButton />
+          <span className="lobby-count num" aria-label={`参加者 ${list.length}人（上限 ${MAX_MEMBERS}人）`}>
+            {list.length} / {MAX_MEMBERS}
+          </span>
+        </div>
       </div>
       {error && (
         <p className="entry-error" role="alert">

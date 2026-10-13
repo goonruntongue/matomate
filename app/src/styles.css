@@ -1800,3 +1800,17 @@ body.is-dragging .app.is-team .stage canvas { cursor: none !important; }
 /* The hidden attribute must win over our own display rules. */
 [hidden] { display: none !important; }
 .entry-brand h1 small { font-size: 0.5em; color: var(--warning); letter-spacing: 0.05em; }
+
+/* ---------- Invite by QR code ---------- */
+.share-button { white-space: nowrap; }
+.lobby-tools { flex: none; display: flex; align-items: center; gap: 8px; }
+.share { position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; padding: 16px; overflow-y: auto; background: rgba(2, 6, 16, 0.72); }
+.share-card { width: min(400px, 100%); display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 20px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--bg-1); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); color: var(--text-2); font-size: 13px; }
+.share-head { align-self: stretch; display: flex; justify-content: space-between; align-items: center; }
+.share-lead { margin: 0; line-height: 1.6; text-align: center; }
+/* White with a margin of its own: a QR code needs a light quiet zone on any theme. */
+.share-qr { width: min(320px, 100%); height: auto; aspect-ratio: 1; padding: 8px; border-radius: 12px; background: #fff; }
+.share-url { margin: 0; font-size: 16px; font-weight: 700; color: var(--text-1); user-select: all; word-break: break-all; text-align: center; }
+.share-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.share-actions .btn { min-height: 44px; white-space: nowrap; }
+@media (max-width: 640px) { .team-hud .share-button { display: none; } }

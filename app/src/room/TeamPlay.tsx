@@ -9,6 +9,7 @@ import { dom, drag } from '../game/runtime';
 import { TRASH_ID, TRASH_MAX, useGame } from '../state/store';
 import { Icon } from '../ui/Header';
 import { Face } from './Face';
+import { ShareButton } from './Share';
 import { db } from './firebase';
 import { boardKey, isPlaying, teamKey, teamsOf, useHandIns, useSession } from './session';
 import { COMMENT_MAX, CURSOR_IDLE_MS, myPointer, PURPOSE_MAX, startTeamSync, useTeamBoard } from './teamSync';
@@ -136,6 +137,7 @@ export function TeamHeader() {
         {done} / {total}
       </span>
       <span className="team-hud-space" />
+      <ShareButton label="📱 招待" />
       <button
         type="button"
         className="btn team-memo-btn"

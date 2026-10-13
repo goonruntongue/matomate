@@ -5,6 +5,7 @@ import { Admin } from './Admin';
 import { AVATAR_COUNT, avatarThumb, randomAvatar } from './avatars';
 import { EDITION } from './edition';
 import { Face } from './Face';
+import { ShareButton } from './Share';
 import { BLOCK_SETS, blockSetOf, dealableProblems, MAX_MEMBERS, NAME_MAX, teamsOf, useSession, validName, type Member } from './session';
 
 const AvatarViewer = lazy(() => import('./AvatarViewer'));
@@ -47,6 +48,7 @@ function Login() {
         ゲストで入る
       </button>
       <p className="entry-note">Google アカウントがないときは、ゲストで入れます。</p>
+      <ShareButton label="📱 QRコードで、ほかの人を招待する" />
     </div>
   );
 }
@@ -280,9 +282,12 @@ function Lobby() {
                 : '参加者のようす'}
           </h2>
         </div>
-        <span className="lobby-count num" aria-label={`参加者 ${list.length}人（上限 ${MAX_MEMBERS}人）`}>
-          {list.length} / {MAX_MEMBERS}
-        </span>
+        <div className="lobby-tools">
+          <ShareButton />
+          <span className="lobby-count num" aria-label={`参加者 ${list.length}人（上限 ${MAX_MEMBERS}人）`}>
+            {list.length} / {MAX_MEMBERS}
+          </span>
+        </div>
       </div>
       <Messages />
       <SelfMode me={me} />
