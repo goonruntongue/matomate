@@ -2,6 +2,7 @@
 // of it, so this removes the other edition's avatar files and, for DX, puts its own app icon, name
 // and title in place (the home-screen app must be told apart from the pin edition's).
 // Usage: node scripts/prune-dist.mjs pin|dx
+import { createHash } from 'node:crypto';
 import { cpSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -39,6 +40,16 @@ if (edition === 'dx') {
   });
 }
 rmSync(join(dist, 'icons-dx'), { recursive: true, force: true });
+
+// Phones remember an app icon by its address (iOS keeps it even after the site's cache is cleared), so
+// the icon addresses carry a stamp of the artwork: a new icon is a new address, and is fetched again.
+const stamp = createHash('md5').update(readFileSync(join(dist, 'icons', 'icon-512.png'))).digest('hex').slice(0, 8);
+for (const file of ['index.html', 'manifest.webmanifest']) {
+  const text = readFileSync(join(dist, file), 'utf8');
+  const out = text.replace(/(icons\/[a-z0-9-]+\.png|manifest\.webmanifest)(\?v=[0-9a-f]+)?(?=")/g, `$1?v=${stamp}`);
+  if (out === text) throw new Error(`${file}: no icon address to stamp`);
+  writeFileSync(join(dist, file), out);
+}
 // The offline list must not name files that are not on this site.
 const precache = join(dist, 'precache.json');
 if (existsSync(precache)) {
