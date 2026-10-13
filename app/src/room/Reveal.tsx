@@ -5,13 +5,13 @@
 //    heart to the team whose answer they liked (their own team is allowed).
 //  - Score: the hearts are counted and, when points are on, added to the first half's correct answers.
 // The game master can point at one team (it is highlighted for everybody) while it explains itself.
-import { useEffect, useMemo, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { create } from 'zustand';
 import { PROBLEMS } from '../data/problems';
 import { dealTeamBoard, TRAY_GLYPHS, useGame } from '../state/store';
 import { THEMES } from '../theme/themes';
 import { avatarThumb } from './avatars';
-import { castVote, checkBoard, layOutFree, useBoards, useMyVote, useVotes, type Answer, type BoardData, type FreeAnswer } from './boards';
+import { castVote, checkBoard, layOutFree, slotUsed, useBoards, useFreeTeams, useMyVote, useVotes, type Answer, type BoardData, type FreeAnswer, type FreeTeam } from './boards';
 import { isFreeHalf, teamsOf, useCanRun, useSession, type Member, type Round } from './session';
 
 /** The game master flips between this screen and the control panel. */
@@ -150,6 +150,33 @@ function FreeBody({ answer, board }: { answer: FreeAnswer; board: BoardData }) {
   );
 }
 
+/**
+ * Second half of one team. A team that stocked several purposes shows its first choice; the others
+ * are a tab away (each viewer flips for themselves).
+ */
+function FreeSlots({ round, team }: { round: Round; team: FreeTeam }) {
+  const used = team.slots.map((board, i) => ({ board, n: i + 1 })).filter(({ board, n }) => slotUsed(board) || n === team.primary);
+  const [shown, setShown] = useState(team.primary);
+  const current = used.find((u) => u.n === shown) ?? used.find((u) => u.n === team.primary) ?? used[0];
+  const answer = useMemo(() => (current ? layOutFree(round, current.board) : null), [round, current]);
+  if (!current || !answer) return <p className="rv-none">答えがありません</p>;
+  return (
+    <>
+      {used.length > 1 && (
+        <div className="team-slot-tabs" role="tablist" aria-label="目的">
+          {used.map(({ n }) => (
+            <button key={n} type="button" role="tab" aria-selected={n === current.n} className={`team-slot-tab${n === current.n ? ' is-on' : ''}`} onClick={() => setShown(n)}>
+              目的{n}
+              {n === team.primary && <small>★第一候補</small>}
+            </button>
+          ))}
+        </div>
+      )}
+      <FreeBody answer={answer} board={current.board} />
+    </>
+  );
+}
+
 function TeamCard(props: { name: string; mates: Member[]; rank: number | null; focused: boolean; onFocus?: () => void; children: ReactNode; foot?: ReactNode }) {
   const { name, mates, rank, focused, onFocus, children, foot } = props;
   const className = `rv-team${focused ? ' is-focus' : ''}`;
@@ -195,7 +222,7 @@ export function Reveal() {
   const free = isFreeHalf(phase);
   const scoring = phase === 'score';
   const fixedBoards = useBoards(round, true, false);
-  const freeBoards = useBoards(round, free, true);
+  const freeTeams = useFreeTeams(round, free);
   const votes = useVotes(round, isAdmin || scoring);
   const myVote = useMyVote(round, isAdmin ? '' : uid);
   const problem = PROBLEMS.find((p) => p.id === round?.problemId);
@@ -207,7 +234,7 @@ export function Reveal() {
     const list = teamsOf(config)
       .map((team) => {
         const fixedBoard = fixedBoards[team.id] ?? {};
-        const freeBoard = freeBoards[team.id] ?? {};
+        const freeTeam = freeTeams[team.id];
         const mates = Object.values(members).filter((m) => m.team === team.id).sort((a, b) => (a.joinedAt ?? 0) - (b.joinedAt ?? 0));
         const fixed = fixedBoard.assign || fixedBoard.submitted ? checkBoard(round, fixedBoard) : null;
         const correct = fixed?.grade.correct ?? 0;
@@ -215,14 +242,13 @@ export function Reveal() {
           team,
           mates,
           fixedBoard,
-          freeBoard,
           fixed,
-          freeAnswer: free && (freeBoard.assign || freeBoard.submitted) ? layOutFree(round, freeBoard) : null,
+          freeTeam: free && freeTeam && (freeTeam.submitted || freeTeam.slots.some(slotUsed)) ? freeTeam : null,
           correct,
           hearts: hearts(team.id),
           // What the ranking goes by: correct answers after the first half, plus hearts at the end.
           total: scoring ? correct + hearts(team.id) : correct,
-          answered: !!(fixedBoard.submitted || freeBoard.submitted),
+          answered: !!(fixedBoard.submitted || freeTeam?.submitted),
         };
       })
       .filter((row) => row.mates.length > 0 || row.answered);
@@ -231,7 +257,7 @@ export function Reveal() {
     // Highest first; teams with the same total share a place.
     const sorted = [...list].sort((a, b) => b.total - a.total);
     return sorted.map((row) => ({ ...row, rank: 1 + sorted.filter((other) => other.total > row.total).length }));
-  }, [round, config, members, fixedBoards, freeBoards, votes, free, scoring, phase]);
+  }, [round, config, members, fixedBoards, freeTeams, votes, free, scoring, phase]);
 
   // On a phone the teams are stacked: bring the one being pointed at into view.
   const focus = reveal.focus;
@@ -347,8 +373,8 @@ export function Reveal() {
               </p>
             )}
             {free ? (
-              row.freeAnswer ? (
-                <FreeBody answer={row.freeAnswer} board={row.freeBoard} />
+              row.freeTeam ? (
+                <FreeSlots key={row.freeTeam.primary} round={round} team={row.freeTeam} />
               ) : (
                 <p className="rv-none">答えがありません</p>
               )

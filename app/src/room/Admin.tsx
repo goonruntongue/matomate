@@ -5,7 +5,7 @@ import { PROBLEMS } from '../data/problems';
 import { dealTeamBoard, TRASH_ID, TRAY_GLYPHS, useGame } from '../state/store';
 import { THEMES } from '../theme/themes';
 import { avatarThumb } from './avatars';
-import { useBoards, type BoardData } from './boards';
+import { slotUsed, useBoards, useFreeTeams, type BoardData } from './boards';
 import { ModelAnswer, useRevealUi } from './Reveal';
 import {
   BLOCK_SETS,
@@ -13,6 +13,7 @@ import {
   dealableProblems,
   isFreeHalf,
   isPlaying,
+  useHandIns,
   MAX_MEMBERS,
   MAX_TEAM_SIZE,
   MAX_TEAMS,
@@ -162,7 +163,10 @@ export function Admin() {
   const host = useSession((s) => s.host);
   const playing = phase !== 'lobby';
   const sorting = isPlaying(phase);
-  const boards = useBoards(round, playing, isFreeHalf(phase));
+  const freeHalf = isFreeHalf(phase);
+  const boards = useBoards(round, playing && !freeHalf, false);
+  const freeTeams = useFreeTeams(round, playing && freeHalf);
+  const handIns = useHandIns();
   const [showAnswers, setShowAnswers] = useState(true);
   const [showModel, setShowModel] = useState(false);
   const [confirming, setConfirming] = useState<'clear' | 'end' | null>(null);
@@ -173,9 +177,7 @@ export function Admin() {
   const teams = teamsOf(config);
   const list = Object.entries(members).sort(([, a], [, b]) => (a.joinedAt ?? 0) - (b.joinedAt ?? 0));
   const unassigned = list.filter(([, m]) => !teams.some((t) => t.id === m.team));
-  const active = teams.filter((t) => list.some(([, m]) => m.team === t.id));
-  const waiting = active.filter((t) => !boards[t.id]?.submitted);
-  const allIn = sorting && active.length > 0 && waiting.length === 0;
+  const { active, waiting, allIn } = handIns;
   const set = blockSetOf(config.blockSet);
   const problems = useMemo(() => dealableProblems(), []);
   const total = round ? round.sizes.reduce((a, b) => a + b, 0) : 0;
@@ -328,17 +330,26 @@ export function Admin() {
         <div className="admin-teams">
           {teams.map((team) => {
             const inTeam = list.filter(([, m]) => m.team === team.id);
-            const board = boards[team.id] ?? {};
-            const placed = Object.keys(board.assign ?? {}).length;
+            const free = freeTeams[team.id];
+            // Second half: every purpose the team has worked on, its first choice on top.
+            const shown: { board: BoardData; title: string }[] = freeHalf
+              ? (free?.slots ?? [])
+                  .map((board, i) => ({ board, n: i + 1 }))
+                  .filter(({ board, n }) => slotUsed(board) || n === (free?.primary ?? 1))
+                  .sort((a, b) => Number(b.n === free?.primary) - Number(a.n === free?.primary))
+                  .map(({ board, n }) => ({ board, title: config.slots > 1 ? `目的${n}${n === free?.primary ? '（第一候補）' : ''}` : '' }))
+              : [{ board: boards[team.id] ?? {}, title: '' }];
+            const placed = Object.keys(shown[0]?.board.assign ?? {}).length;
+            const handedIn = sorting ? !waiting.some((t) => t.id === team.id) : true;
             return (
-              <article key={team.id} className={`admin-team${board.submitted ? ' is-submitted' : ''}`}>
+              <article key={team.id} className={`admin-team${playing && handedIn && inTeam.length > 0 ? ' is-submitted' : ''}`}>
                 <header>
                   <h4>{team.name}</h4>
                   <span className="num">
                     {inTeam.length} / {config.teamSize}
                   </span>
                   {playing && inTeam.length > 0 && (
-                    <span className={`admin-badge${board.submitted ? ' is-done' : ''}`}>{board.submitted ? '提出済み' : `${placed} / ${total} 個`}</span>
+                    <span className={`admin-badge${handedIn ? ' is-done' : ''}`}>{handedIn ? '提出済み' : `${placed} / ${total} 個`}</span>
                   )}
                 </header>
                 <ul className="admin-members">
@@ -347,7 +358,19 @@ export function Admin() {
                   ))}
                   {inTeam.length === 0 && <li className="admin-empty">だれもいません</li>}
                 </ul>
-                {playing && round && inTeam.length > 0 && (showAnswers ? <TeamAnswer round={round} board={board} /> : <p className="admin-hidden">回答は伏せています</p>)}
+                {playing &&
+                  round &&
+                  inTeam.length > 0 &&
+                  (showAnswers ? (
+                    shown.map(({ board, title }, i) => (
+                      <div key={i}>
+                        {title && <p className="admin-slot-title">{title}</p>}
+                        <TeamAnswer round={round} board={board} />
+                      </div>
+                    ))
+                  ) : (
+                    <p className="admin-hidden">回答は伏せています</p>
+                  ))}
               </article>
             );
           })}
@@ -410,7 +433,7 @@ export function Admin() {
           </label>
           <Stepper label="自由課題の目的の数" value={config.slots} min={1} max={3} disabled={busy} onChange={(slots) => void saveConfig({ slots })} />
         </div>
-        <p className="entry-note">チーム数 × 人数は、{MAX_MEMBERS}人までです。「自由課題の目的の数」は、まだ1つで動きます（2つ以上にしても、今は変わりません）。</p>
+        <p className="entry-note">チーム数 × 人数は、{MAX_MEMBERS}人までです。「自由課題の目的の数」を2〜3にすると、後半でチームが目的をいくつかストックし、第一候補を1つ選んで発表します。</p>
         <div className="admin-toggles">
           <Toggle label="点数をつける" note="正解1つ・ハート1つを1点として数えます" value={config.points} disabled={busy} onChange={(points) => void saveConfig({ points })} />
           <Toggle label="順位をつける" value={config.ranking} disabled={busy || !config.points} onChange={(ranking) => void saveConfig({ ranking })} />

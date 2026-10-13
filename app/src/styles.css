@@ -1783,3 +1783,11 @@ body.is-dragging .app.is-team .stage canvas { cursor: none !important; }
 .host-bar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .host-bar-actions .btn { min-height: 40px; }
 .admin-link { margin: 0 4px; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
+
+/* ---------- Second half: several purposes ---------- */
+.team-slots { display: grid; gap: 6px; }
+.team-slot-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.team-slot-tab { display: inline-flex; align-items: baseline; gap: 6px; min-height: 36px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--bg-0) 45%, transparent); color: var(--text-2); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.team-slot-tab small { font-size: 10px; color: var(--warning); }
+.team-slot-tab.is-on { border-color: var(--accent); color: var(--text-1); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.admin-slot-title { margin: 8px 0 0; font-size: 12px; font-weight: 700; color: var(--accent); }

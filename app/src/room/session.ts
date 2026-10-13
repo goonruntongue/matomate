@@ -109,9 +109,23 @@ export const isResults = (phase: Phase) => phase === 'fixedReveal' || phase === 
 /** The second half, and everything after it. */
 export const isFreeHalf = (phase: Phase) => phase === 'free' || phase === 'freeReveal' || phase === 'score';
 
-/** Where a round's boards live under room/boards/{team}/: the first half, or the second half's (first) purpose. */
-export function boardKey(round: number, free: boolean): string {
-  return free ? `r${round}f1` : `r${round}`;
+export const MAX_SLOTS = 3;
+
+/**
+ * Where a round's boards live under room/boards/{team}/. The first half has one board (r3). In the
+ * second half a team may stock several purposes, each with a board of its own (r3f1, r3f2, r3f3).
+ */
+export function boardKey(round: number, free: boolean, slot = 1): string {
+  return free ? `r${round}f${slot}` : `r${round}`;
+}
+
+/**
+ * Where the team-wide facts of a half live: whether the team has handed in, and (second half) which
+ * purpose is its first choice. The first half keeps them on its one board (r3); the second half on r3f.
+ * room/status/{team}/ uses the same key.
+ */
+export function teamKey(round: number, free: boolean): string {
+  return free ? `r${round}f` : `r${round}`;
 }
 
 /** What the results screen shows right now; set by the game master, the same for everybody. */
@@ -427,7 +441,7 @@ export function useHandIns(): { active: Team[]; waiting: Team[]; allIn: boolean 
   const status = useSession((s) => s.status);
   const round = useSession((s) => s.round);
   const phase = useSession((s) => s.phase);
-  const key = round ? boardKey(round.round, phase === 'free') : '';
+  const key = round ? teamKey(round.round, phase === 'free') : '';
   const active = teamsOf(config).filter((t) => Object.values(members).some((m) => m.team === t.id));
   const waiting = active.filter((t) => !status[t.id]?.[key]);
   return { active, waiting, allIn: isPlaying(phase) && active.length > 0 && waiting.length === 0 };

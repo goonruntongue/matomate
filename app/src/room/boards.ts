@@ -6,7 +6,7 @@ import { PROBLEMS } from '../data/problems';
 import { grade, type Grade } from '../game/grading';
 import { dealTeamBoard, TRASH_ID, type Item } from '../state/store';
 import { db } from './firebase';
-import { boardKey, type Round } from './session';
+import { boardKey, MAX_SLOTS, teamKey, type Round } from './session';
 
 export interface BoardData {
   assign?: Record<string, { tray: string; at: number }>;
@@ -127,4 +127,44 @@ export function useMyVote(round: Round | null, uid: string): string {
 
 export function castVote(round: Round, uid: string, teamId: string): Promise<void> {
   return set(ref(db, `room/votes/r${round.round}/${uid}`), teamId);
+}
+
+/** A team's second half: every purpose it stocked (index 0 = 目的1), and which one it presents first. */
+export interface FreeTeam {
+  slots: BoardData[];
+  primary: number;
+  submitted?: { by: string; at: number };
+}
+
+/** A purpose the team actually worked on (an untouched slot is not shown anywhere). */
+export const slotUsed = (board: BoardData | undefined) => !!board && (!!board.purpose?.trim() || !!board.assign);
+
+/** Every team's second half, by team id. Empty while `enabled` is false. */
+export function useFreeTeams(round: Round | null, enabled: boolean): Record<string, FreeTeam> {
+  const [teams, setTeams] = useState<Record<string, FreeTeam>>({});
+  const n = round?.round;
+  useEffect(() => {
+    if (!enabled || n === undefined) {
+      setTeams({});
+      return;
+    }
+    return onValue(
+      ref(db, 'room/boards'),
+      (snap) => {
+        const all = (snap.val() ?? {}) as Record<string, Record<string, BoardData & { primary?: number }>>;
+        setTeams(
+          Object.fromEntries(
+            Object.entries(all).map(([team, rounds]) => {
+              const wide = rounds?.[teamKey(n, true)] ?? {};
+              const slots = Array.from({ length: MAX_SLOTS }, (_, i) => rounds?.[boardKey(n, true, i + 1)] ?? {});
+              const primary = Number(wide.primary) >= 1 && Number(wide.primary) <= MAX_SLOTS ? Number(wide.primary) : 1;
+              return [team, { slots, primary, submitted: wide.submitted }];
+            }),
+          ),
+        );
+      },
+      () => setTeams({}),
+    );
+  }, [n, enabled]);
+  return teams;
 }

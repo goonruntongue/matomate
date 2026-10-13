@@ -70,19 +70,19 @@
           "$round": {
             "assign": {
               "$item": {
-                ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((root.child('room/state/phase').val() === 'fixed' && !$round.contains('f')) || (root.child('room/state/phase').val() === 'free' && $round.contains('f'))) && !data.parent().parent().child('submitted').exists() && (!data.parent().parent().child('holds').child($item).exists() || data.parent().parent().child('holds').child($item).val() === auth.uid)",
+                ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((root.child('room/state/phase').val() === 'fixed' && !$round.contains('f')) || (root.child('room/state/phase').val() === 'free' && $round.contains('f'))) && !data.parent().parent().parent().child($round.replace('f1', 'f').replace('f2', 'f').replace('f3', 'f')).child('submitted').exists() && (!data.parent().parent().child('holds').child($item).exists() || data.parent().parent().child('holds').child($item).val() === auth.uid)",
                 ".validate": "newData.hasChildren(['tray', 'at']) && newData.child('tray').isString() && newData.child('tray').val().matches(/^(tray-[0-9]|trash)$/) && newData.child('at').isNumber()"
               }
             },
             "labels": {
               "$tray": {
-                ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((root.child('room/state/phase').val() === 'fixed' && !$round.contains('f')) || (root.child('room/state/phase').val() === 'free' && $round.contains('f'))) && !data.parent().parent().child('submitted').exists()",
+                ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((root.child('room/state/phase').val() === 'fixed' && !$round.contains('f')) || (root.child('room/state/phase').val() === 'free' && $round.contains('f'))) && !data.parent().parent().parent().child($round.replace('f1', 'f').replace('f2', 'f').replace('f3', 'f')).child('submitted').exists()",
                 ".validate": "$tray.matches(/^tray-[0-9]$/) && newData.isString() && newData.val().length <= 20"
               }
             },
             "holds": {
               "$item": {
-                ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((root.child('room/state/phase').val() === 'fixed' && !$round.contains('f')) || (root.child('room/state/phase').val() === 'free' && $round.contains('f'))) && (!newData.exists() || (!data.parent().parent().child('submitted').exists() && newData.val() === auth.uid)) && (!data.exists() || data.val() === auth.uid)"
+                ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((root.child('room/state/phase').val() === 'fixed' && !$round.contains('f')) || (root.child('room/state/phase').val() === 'free' && $round.contains('f'))) && (!newData.exists() || (!data.parent().parent().parent().child($round.replace('f1', 'f').replace('f2', 'f').replace('f3', 'f')).child('submitted').exists() && newData.val() === auth.uid)) && (!data.exists() || data.val() === auth.uid)"
               }
             },
             "cursors": {
@@ -100,8 +100,13 @@
               ".validate": "newData.hasChildren(['by', 'at']) && newData.child('by').val() === auth.uid && newData.child('at').isNumber()"
             },
             "purpose": {
-              ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((root.child('room/state/phase').val() === 'fixed' && !$round.contains('f')) || (root.child('room/state/phase').val() === 'free' && $round.contains('f'))) && !data.parent().child('submitted').exists()",
+              ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((root.child('room/state/phase').val() === 'fixed' && !$round.contains('f')) || (root.child('room/state/phase').val() === 'free' && $round.contains('f'))) && !data.parent().parent().child($round.replace('f1', 'f').replace('f2', 'f').replace('f3', 'f')).child('submitted').exists()",
               ".validate": "newData.isString() && newData.val().length <= 120"
+            },
+            ".validate": "$round.matches(/^r[0-9]+(f[1-3]?)?$/)",
+            "primary": {
+              ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((root.child('room/state/phase').val() === 'fixed' && !$round.contains('f')) || (root.child('room/state/phase').val() === 'free' && $round.contains('f'))) && !data.parent().child('submitted').exists()",
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 3"
             }
           }
         },

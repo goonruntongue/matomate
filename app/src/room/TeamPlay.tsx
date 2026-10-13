@@ -9,7 +9,7 @@ import { TRASH_ID, TRASH_MAX, useGame } from '../state/store';
 import { Icon } from '../ui/Header';
 import { avatarThumb } from './avatars';
 import { db } from './firebase';
-import { boardKey, isPlaying, teamsOf, useHandIns, useSession } from './session';
+import { boardKey, isPlaying, teamKey, teamsOf, useHandIns, useSession } from './session';
 import { COMMENT_MAX, CURSOR_IDLE_MS, myPointer, PURPOSE_MAX, startTeamSync, useTeamBoard } from './teamSync';
 
 const CHAT_MAX = 500;
@@ -48,11 +48,24 @@ export function TeamSession() {
   const teamId = me?.team;
   // The second half deals the same blocks onto a board of its own.
   const free = useSession((s) => s.phase === 'free');
-  const key = round ? `${round.round}|${round.problemId}|${round.seed}|${round.sizes.join(',')}|${free}` : '';
+  // Second half: the team may stock several purposes, each on a board of its own. Which one this player
+  // is looking at is their own choice; a new half always starts on the first.
+  const slots = useSession((s) => s.config.slots);
+  const wanted = useTeamBoard((s) => s.slot);
+  const slot = free ? Math.min(Math.max(1, wanted), Math.max(1, slots)) : 1;
+  const half = round ? `${round.round}|${round.problemId}|${round.seed}|${round.sizes.join(',')}|${free}` : '';
+  const shownHalf = useRef('');
+  useLayoutEffect(() => {
+    useTeamBoard.getState().setSlot(1);
+  }, [half]);
+  const key = `${half}|${slot}`;
   useLayoutEffect(() => {
     if (!round || !teamId || !uid) return;
     if (!useGame.getState().loadTeamBoard(round, free)) return;
-    const stopSync = startTeamSync(teamId, uid, boardKey(round.round, free));
+    // Switching between purposes is not a new task: the brief is not shown again.
+    if (shownHalf.current === half) useGame.getState().dismissBriefing();
+    shownHalf.current = half;
+    const stopSync = startTeamSync(teamId, uid, boardKey(round.round, free, slot), teamKey(round.round, free));
     // The memo is the team's own: nobody else (not even the game master) can read it.
     const stopChat = onValue(query(ref(db, `room/chats/${teamId}`), limitToLast(CHAT_KEEP)), (snap) => {
       const messages: ChatMessage[] = [];
@@ -76,10 +89,11 @@ export function TeamSession() {
   const submitted = useTeamBoard((s) => !!s.submitted);
   const phase = useSession((s) => s.phase);
   const locked = submitted || !isPlaying(phase);
+  // Also after every deal (a new half, or another purpose's board): dealing unlocks the board.
   useEffect(() => {
     if (locked && drag.active && drag.id) yieldBlock(drag.id);
     useGame.getState().setLocked(locked);
-  }, [locked]);
+  }, [locked, key]);
   return null;
 }
 
@@ -289,7 +303,12 @@ export function TeamSubmit({ checks }: { checks: { ok: boolean; text: string }[]
   // Second half: the team must also have said what it is sorting for.
   const free = useGame((s) => s.free);
   const purpose = useTeamBoard((s) => s.purpose);
+  const slots = useSession((s) => s.config.slots);
+  const slot = useTeamBoard((s) => s.slot);
+  const primary = useTeamBoard((s) => Math.min(s.primary, Math.max(1, slots)));
   if (free) checks = [{ ok: !!purpose.trim(), text: purpose.trim() ? '目的を決めた' : '目的を決める（いちばん上の欄）' }, ...checks];
+  // Several purposes: what gets handed in is judged on the first choice, so that is the board to finish.
+  const offPrimary = free && slots > 1 && slot !== primary;
   const ready = checks.every((c) => c.ok);
   const revealed = !isPlaying(phase);
   const commentBox = (
@@ -350,9 +369,18 @@ export function TeamSubmit({ checks }: { checks: { ok: boolean; text: string }[]
         )}
       </ul>
       {ready && commentBox}
-      <button type="button" className="btn btn-primary submit-button" disabled={!ready || !comment.trim()} onClick={submit}>
-        チームの答えを提出する
-      </button>
+      {offPrimary ? (
+        <>
+          <p className="team-submit-note">提出は、第一候補（目的{primary}）の画面から行います。ほかの目的は、途中のままでも発表で見せられます。</p>
+          <button type="button" className="btn" onClick={() => useTeamBoard.getState().setSlot(primary)}>
+            第一候補（目的{primary}）を開く
+          </button>
+        </>
+      ) : (
+        <button type="button" className="btn btn-primary submit-button" disabled={!ready || !comment.trim()} onClick={submit}>
+          チームの答えを提出する
+        </button>
+      )}
       {error && (
         <p className="team-chat-error" role="alert">
           {error}
@@ -410,11 +438,32 @@ export function TeamPurpose() {
   const locked = useGame((s) => s.locked);
   const examples = useGame((s) => PROBLEMS[s.problemIndex]?.examples ?? []);
   const [showExamples, setShowExamples] = useState(false);
+  const slots = useSession((s) => s.config.slots);
+  const slot = useTeamBoard((s) => Math.min(s.slot, Math.max(1, slots)));
+  const primary = useTeamBoard((s) => Math.min(s.primary, Math.max(1, slots)));
   return (
     <div className="team-purpose">
+      {/* Several purposes: one tab each. Everyone on the team can be on a different tab. */}
+      {slots > 1 && (
+        <div className="team-slots">
+          <div className="team-slot-tabs" role="tablist" aria-label="目的">
+            {Array.from({ length: slots }, (_, i) => i + 1).map((k) => (
+              <button key={k} type="button" role="tab" aria-selected={k === slot} className={`team-slot-tab${k === slot ? ' is-on' : ''}`} onClick={() => useTeamBoard.getState().setSlot(k)}>
+                目的{k}
+                {k === primary && <small>★第一候補</small>}
+              </button>
+            ))}
+          </div>
+          {slot !== primary && !locked && (
+            <button type="button" className="team-examples-toggle" onClick={() => useTeamBoard.getState().setPrimary(slot)}>
+              この目的を第一候補にする
+            </button>
+          )}
+        </div>
+      )}
       <label className="team-comment">
         <span>
-          目的：だれが・どんなとき・何のために？
+          {slots > 1 ? `目的${slot}` : '目的'}：だれが・どんなとき・何のために？
           <small className="num">
             {purpose.length}/{PURPOSE_MAX}
           </small>

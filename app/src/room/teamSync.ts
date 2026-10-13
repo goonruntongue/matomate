@@ -8,6 +8,8 @@
 //   purpose         = text           second half: the purpose the team chose to sort for
 //   comment         = text           the team's final comment: why it sorted this way
 //   submitted       = { by, at }     set once the team has handed its answer in (removed to take it back)
+// In the second half a team may stock several purposes: each has a board like the above (r3f1, r3f2…),
+// and `submitted` moves to the team-wide node r3f, next to `primary` (which purpose is the first choice).
 //
 // Two people reaching for the same block: the first hold written wins (the rules refuse the second),
 // and the loser's block springs back. Two people typing the same label: the last one to stop typing wins.
@@ -43,6 +45,12 @@ interface TeamBoardState {
   setPurpose(text: string): void;
   comment: string;
   submitted: Submitted | null;
+  /** Second half: which of the team's purposes this player is looking at (each player chooses for themselves). */
+  slot: number;
+  setSlot(slot: number): void;
+  /** Second half: the purpose the team will present first. Shared by the team. */
+  primary: number;
+  setPrimary(slot: number): void;
   error: string;
   setComment(text: string): void;
   /** Hand the team's answer in. The board is locked for everyone on the team until it is taken back. */
@@ -52,7 +60,9 @@ interface TeamBoardState {
 }
 
 /** Set while a board is being synced: where it lives, and who this player is. */
-let active: { base: string; statusPath: string; uid: string; touch(field: 'comment' | 'purpose'): void } | null = null;
+let active: { base: string; teamBase: string; statusPath: string; uid: string; touch(field: 'comment' | 'purpose'): void } | null = null;
+/** The team-wide node of the last sync: `submitted` and `primary` carry over while it stays the same (switching purposes). */
+let lastTeamBase = '';
 
 export const useTeamBoard = create<TeamBoardState>()((set_, get_) => ({
   purpose: '',
@@ -62,6 +72,13 @@ export const useTeamBoard = create<TeamBoardState>()((set_, get_) => ({
   },
   comment: '',
   submitted: null,
+  slot: 1,
+  setSlot: (slot) => set_({ slot }),
+  primary: 1,
+  setPrimary: (slot) => {
+    if (!active) return;
+    set(ref(db, `${active.teamBase}/primary`), slot).catch(() => set_({ error: '第一候補を変えられませんでした。' }));
+  },
   error: '',
   setComment: (text) => {
     set_({ comment: text.slice(0, COMMENT_MAX) });
@@ -69,21 +86,21 @@ export const useTeamBoard = create<TeamBoardState>()((set_, get_) => ({
   },
   submit: () => {
     if (!active) return;
-    const { base, statusPath, uid } = active;
+    const { base, teamBase, statusPath, uid } = active;
     set_({ error: '' });
     // The comment goes with it, in case the last keystrokes haven't been sent yet.
     // room/status only says "this team has handed in": that much everyone may know (the host needs it).
     update(ref(db), {
       [`${base}/comment`]: get_().comment.trim(),
       [`${base}/purpose`]: get_().purpose.trim(),
-      [`${base}/submitted`]: { by: uid, at: serverTimestamp() },
+      [`${teamBase}/submitted`]: { by: uid, at: serverTimestamp() },
       [statusPath]: true,
     }).catch(() => set_({ error: '提出できませんでした。もう一度お試しください。' }));
   },
   takeBack: () => {
     if (!active) return;
     set_({ error: '' });
-    update(ref(db), { [`${active.base}/submitted`]: null, [active.statusPath]: null }).catch(() => set_({ error: '取り消せませんでした。結果発表が始まっているかもしれません。' }));
+    update(ref(db), { [`${active.teamBase}/submitted`]: null, [active.statusPath]: null }).catch(() => set_({ error: '取り消せませんでした。結果発表が始まっているかもしれません。' }));
   },
 }));
 
@@ -92,9 +109,10 @@ interface RemoteAssign {
   at: number;
 }
 
-/** `key` names the board within the team: see boardKey() in session.ts. */
-export function startTeamSync(teamId: string, uid: string, key: string): () => void {
+/** `key` names the board within the team, `teamKey` its team-wide node: see boardKey() and teamKey() in session.ts. */
+export function startTeamSync(teamId: string, uid: string, key: string, teamKey: string): () => void {
   const base = `room/boards/${teamId}/${key}`;
+  const teamBase = `room/boards/${teamId}/${teamKey}`;
   const at = (path: string) => ref(db, `${base}/${path}`);
   let remoteAssign: Record<string, RemoteAssign> = {};
   let remoteLabels: Record<string, string> = {};
@@ -127,10 +145,12 @@ export function startTeamSync(teamId: string, uid: string, key: string): () => v
     }
     useTeamBoard.setState({ [field]: t.remote });
   }
-  useTeamBoard.setState({ comment: '', purpose: '', submitted: null, error: '' });
+  useTeamBoard.setState({ comment: '', purpose: '', error: '', ...(teamBase === lastTeamBase ? {} : { submitted: null, primary: 1 }) });
+  lastTeamBase = teamBase;
   active = {
     base,
-    statusPath: `room/status/${teamId}/${key}`,
+    teamBase,
+    statusPath: `room/status/${teamId}/${teamKey}`,
     uid,
     // This player typed in the box: send it once the typing pauses.
     touch: (field) => {
@@ -218,7 +238,11 @@ export function startTeamSync(teamId: string, uid: string, key: string): () => v
         applyText(field);
       }),
     ),
-    onValue(at('submitted'), (snap) => {
+    onValue(ref(db, `${teamBase}/primary`), (snap) => {
+      const v = Number(snap.val());
+      useTeamBoard.setState({ primary: v >= 1 && v <= 3 ? v : 1 });
+    }),
+    onValue(ref(db, `${teamBase}/submitted`), (snap) => {
       const v = snap.val() as Submitted | null;
       useTeamBoard.setState({ submitted: v && typeof v.by === 'string' ? { by: v.by, at: typeof v.at === 'number' ? v.at : Date.now() } : null });
     }),
@@ -358,7 +382,7 @@ export function startTeamSync(teamId: string, uid: string, key: string): () => v
     active = null;
     window.clearTimeout(texts.comment.timer);
     window.clearTimeout(texts.purpose.timer);
-    useTeamBoard.setState({ comment: '', purpose: '', submitted: null, error: '' });
+    useTeamBoard.setState({ comment: '', purpose: '', error: '' });
     offs.forEach((off) => off());
     unsubscribe();
     window.clearInterval(tick);
