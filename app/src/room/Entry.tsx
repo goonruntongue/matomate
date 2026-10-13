@@ -3,6 +3,8 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { SafeBoundary } from '../ui/SafeBoundary';
 import { Admin } from './Admin';
 import { AVATAR_COUNT, avatarThumb, randomAvatar } from './avatars';
+import { EDITION } from './edition';
+import { Face } from './Face';
 import { BLOCK_SETS, blockSetOf, dealableProblems, MAX_MEMBERS, NAME_MAX, teamsOf, useSession, validName, type Member } from './session';
 
 const AvatarViewer = lazy(() => import('./AvatarViewer'));
@@ -48,6 +50,9 @@ function Login() {
   );
 }
 
+/** Only the dx edition has characters to pick; in the pin edition a profile is just a nickname. */
+const PICK = EDITION === 'dx';
+
 function AvatarFace({ n, className = '' }: { n: number; className?: string }) {
   return <img className={`avatar-face ${className}`} src={avatarThumb(n)} alt="" draggable={false} />;
 }
@@ -77,15 +82,17 @@ function Profile({ current, onDone }: { current?: Member; onDone?: () => void })
         void submit();
       }}
     >
-      <h2 className="entry-title">{current ? 'ニックネームとアバターを変える' : 'ニックネームとアバターを決めよう'}</h2>
+      <h2 className="entry-title">{PICK ? (current ? 'ニックネームとアバターを変える' : 'ニックネームとアバターを決めよう') : current ? 'ニックネームを変える' : 'ニックネームを決めよう'}</h2>
       <Messages />
-      <div className="profile">
-        <div className="profile-stage">
-          <SafeBoundary key={avatar} fallback={<AvatarFace n={avatar} className="is-big" />}>
-            <Suspense fallback={<AvatarFace n={avatar} className="is-big" />}>
-              <AvatarViewer n={avatar} className="profile-canvas" />
-            </Suspense>
-          </SafeBoundary>
+      <div className={`profile${PICK ? '' : ' is-plain'}`}>
+        <div className="profile-stage" hidden={!PICK}>
+          {PICK && (
+            <SafeBoundary key={avatar} fallback={<AvatarFace n={avatar} className="is-big" />}>
+              <Suspense fallback={<AvatarFace n={avatar} className="is-big" />}>
+                <AvatarViewer n={avatar} className="profile-canvas" />
+              </Suspense>
+            </SafeBoundary>
+          )}
         </div>
         <div className="profile-fields">
           <label className="entry-label" htmlFor="nickname">
@@ -106,11 +113,12 @@ function Profile({ current, onDone }: { current?: Member; onDone?: () => void })
           <p className="entry-note profile-name-note" id="nickname-note">
             {name.trim() === 'ゲスト' ? '「ゲスト」のままでは入れません。ほかの名前にしてください。' : 'チームの人に見える名前です。入力すると入室できます。'}
           </p>
-          <p className="entry-label" id="avatar-label">
+          {!PICK && !current && <p className="entry-note">チームに入ると、あなたの色のピンが自動で決まります。</p>}
+          <p className="entry-label" id="avatar-label" hidden={!PICK}>
             アバター
           </p>
-          <div className="avatar-grid" role="radiogroup" aria-labelledby="avatar-label">
-            {Array.from({ length: AVATAR_COUNT }, (_, i) => i + 1).map((n) => (
+          <div className="avatar-grid" role="radiogroup" aria-labelledby="avatar-label" hidden={!PICK}>
+            {Array.from({ length: PICK ? AVATAR_COUNT : 0 }, (_, i) => i + 1).map((n) => (
               <button
                 key={n}
                 type="button"
@@ -144,10 +152,10 @@ function Profile({ current, onDone }: { current?: Member; onDone?: () => void })
   );
 }
 
-function MemberChip({ member, me }: { member: Member; me: boolean }) {
+function MemberChip({ uid, member, me }: { uid: string; member: Member; me: boolean }) {
   return (
     <li className={`member${me ? ' is-me' : ''}${member.online === false ? ' is-away' : ''}`}>
-      <AvatarFace n={member.avatar} />
+      <Face uid={uid} avatar={member.avatar} />
       <span className="member-name">{member.name}</span>
       {me && <span className="member-tag">あなた</span>}
       {member.online === false && <span className="member-tag is-away">切断中</span>}
@@ -292,7 +300,7 @@ function Lobby() {
               </header>
               <ul className="member-list">
                 {inTeam.map(([uid, m]) => (
-                  <MemberChip key={uid} member={m} me={uid === user.uid} />
+                  <MemberChip key={uid} uid={uid} member={m} me={uid === user.uid} />
                 ))}
               </ul>
               {me && !mine && !playing && (
@@ -309,7 +317,7 @@ function Lobby() {
           <h3>チームを選んでいない人</h3>
           <ul className="member-list is-row">
             {unassigned.map(([uid, m]) => (
-              <MemberChip key={uid} member={m} me={uid === user.uid} />
+              <MemberChip key={uid} uid={uid} member={m} me={uid === user.uid} />
             ))}
           </ul>
         </section>
@@ -321,7 +329,7 @@ function Lobby() {
               退室する
             </button>
             <button type="button" className="btn" onClick={() => setEditing(true)}>
-              ニックネームとアバターを変える
+              {PICK ? 'ニックネームとアバターを変える' : 'ニックネームを変える'}
             </button>
           </>
         ) : (

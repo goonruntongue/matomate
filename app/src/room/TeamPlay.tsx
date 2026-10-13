@@ -1,4 +1,5 @@
 // Team play on the shared board: the header, teammates' avatar cursors, and the team's chat memo.
+import { ROOM } from './edition';
 import { limitToLast, onValue, push, query, ref, remove, serverTimestamp, set } from 'firebase/database';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
@@ -7,7 +8,7 @@ import { sendTo, yieldBlock } from '../game/input';
 import { dom, drag } from '../game/runtime';
 import { TRASH_ID, TRASH_MAX, useGame } from '../state/store';
 import { Icon } from '../ui/Header';
-import { avatarThumb } from './avatars';
+import { Face } from './Face';
 import { db } from './firebase';
 import { boardKey, isPlaying, teamKey, teamsOf, useHandIns, useSession } from './session';
 import { COMMENT_MAX, CURSOR_IDLE_MS, myPointer, PURPOSE_MAX, startTeamSync, useTeamBoard } from './teamSync';
@@ -67,7 +68,7 @@ export function TeamSession() {
     shownHalf.current = half;
     const stopSync = startTeamSync(teamId, uid, boardKey(round.round, free, slot), teamKey(round.round, free));
     // The memo is the team's own: nobody else (not even the game master) can read it.
-    const stopChat = onValue(query(ref(db, `room/chats/${teamId}`), limitToLast(CHAT_KEEP)), (snap) => {
+    const stopChat = onValue(query(ref(db, `${ROOM}/chats/${teamId}`), limitToLast(CHAT_KEEP)), (snap) => {
       const messages: ChatMessage[] = [];
       snap.forEach((child) => {
         const v = child.val() as Omit<ChatMessage, 'id'>;
@@ -95,10 +96,6 @@ export function TeamSession() {
     useGame.getState().setLocked(locked);
   }, [locked, key]);
   return null;
-}
-
-function Face({ n, className = '' }: { n: number; className?: string }) {
-  return <img className={`avatar-face ${className}`} src={avatarThumb(n)} alt="" draggable={false} />;
 }
 
 export function TeamHeader() {
@@ -129,7 +126,7 @@ export function TeamHeader() {
       <ul className="team-faces" aria-label="チームのメンバー">
         {mates.map(([id, m]) => (
           <li key={id} className={m.online === false ? 'is-away' : undefined} title={`${m.name}${m.online === false ? '（切断中）' : ''}`}>
-            <Face n={m.avatar} />
+            <Face uid={id} avatar={m.avatar} />
             <span className="sr-only">{m.name}</span>
           </li>
         ))}
@@ -219,7 +216,7 @@ export function TeamChat() {
     if (!text) return;
     setError('');
     setDraft('');
-    set(push(ref(db, `room/chats/${teamId}`)), { uid, name: me.name, avatar: me.avatar, text: text.slice(0, CHAT_MAX), at: serverTimestamp() }).catch(() => {
+    set(push(ref(db, `${ROOM}/chats/${teamId}`)), { uid, name: me.name, avatar: me.avatar, text: text.slice(0, CHAT_MAX), at: serverTimestamp() }).catch(() => {
       setDraft(text);
       setError('送れませんでした。もう一度お試しください。');
     });
@@ -238,12 +235,12 @@ export function TeamChat() {
         {messages.length === 0 && <li className="team-chat-empty">気づいたことや、分け方の理由を書き残せます。</li>}
         {messages.map((m) => (
           <li key={m.id} className={m.uid === uid ? 'is-mine' : undefined}>
-            <Face n={m.avatar} />
+            <Face uid={m.uid} avatar={m.avatar} />
             <div className="team-chat-body">
               <p className="team-chat-meta">
                 <b>{m.name}</b> <span className="num">{clock(m.at)}</span>
                 {m.uid === uid && (
-                  <button type="button" className="team-chat-delete" onClick={() => void remove(ref(db, `room/chats/${teamId}/${m.id}`)).catch(() => undefined)}>
+                  <button type="button" className="team-chat-delete" onClick={() => void remove(ref(db, `${ROOM}/chats/${teamId}/${m.id}`)).catch(() => undefined)}>
                     消す
                   </button>
                 )}

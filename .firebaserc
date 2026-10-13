@@ -1,5 +1,17 @@
 {
   "projects": {
     "default": "matomate"
+  },
+  "targets": {
+    "matomate": {
+      "hosting": {
+        "pin": [
+          "matomate"
+        ],
+        "dx": [
+          "matomate-dx"
+        ]
+      }
+    }
   }
 }

@@ -9,7 +9,9 @@ import * as THREE from 'three';
 import { buddyCornerPx } from '../game/layout';
 import { drag, HOLD_Z, remoteCursors } from '../game/runtime';
 import { useGame } from '../state/store';
-import { avatarUrl, normalized } from './avatars';
+import { avatarUrl, normalized, PIN_URL } from './avatars';
+import { EDITION } from './edition';
+import { usePinColor } from './Face';
 import { useSession, type Member } from './session';
 import { CURSOR_IDLE_MS, myPointer } from './teamSync';
 
@@ -37,8 +39,25 @@ function pointAt(cam: THREE.Camera, fx: number, fy: number, z: number, out: THRE
 }
 
 function Actor({ uid, member, isMe, slot }: { uid: string; member: Member; isMe: boolean; slot: number }) {
-  const { scene } = useGLTF(avatarUrl(member.avatar));
-  const model = useMemo(() => normalized(scene), [scene]);
+  const pin = EDITION === 'pin';
+  const { scene } = useGLTF(pin ? PIN_URL : avatarUrl(member.avatar));
+  const color = usePinColor(uid);
+  const model = useMemo(() => {
+    const copy = normalized(scene);
+    if (pin) {
+      // The pin is modelled in plain white: its colour is the member's.
+      copy.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const material = (mesh.material as THREE.MeshStandardMaterial).clone();
+        material.color.set(color);
+        material.roughness = 0.45;
+        material.metalness = 0;
+        mesh.material = material;
+      });
+    }
+    return copy;
+  }, [scene, pin, color]);
   const group = useRef<THREE.Group>(null);
   const turn = useRef<THREE.Group>(null);
   const label = useRef<HTMLDivElement>(null);

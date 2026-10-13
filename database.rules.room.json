@@ -1,0 +1,158 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "admins": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid"
+      }
+    },
+    "room": {
+      "config": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true)",
+        "blockSet": {
+          ".write": "(auth != null && root.child('room/config/selfMode').val() === true && root.child('room/host').val() === auth.uid)",
+          ".validate": "newData.isString() && newData.val().length <= 10"
+        },
+        "problem": {
+          ".write": "(auth != null && root.child('room/config/selfMode').val() === true && root.child('room/host').val() === auth.uid)",
+          ".validate": "newData.isString() && newData.val().length <= 40"
+        }
+      },
+      "state": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true) || (auth != null && root.child('room/config/selfMode').val() === true && root.child('room/host').val() === auth.uid)"
+      },
+      "seats": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true)",
+        "$n": {
+          ".write": "auth != null && $n.matches(/^([0-9]|[12][0-9])$/) && ((!data.exists() && newData.val() === auth.uid && !root.child('room/members').child(auth.uid).exists() && '' + newData.parent().parent().child('members').child(auth.uid).child('seat').val() === $n) || (data.val() === auth.uid && !newData.exists() && !newData.parent().parent().child('members').child(auth.uid).exists()))"
+        }
+      },
+      "members": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true)",
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid && (!newData.exists() || newData.parent().parent().child('seats').child('' + newData.child('seat').val()).val() === auth.uid)",
+          ".validate": "newData.hasChildren(['name', 'avatar', 'seat'])",
+          "name": {
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20 && newData.val() !== 'ゲスト'"
+          },
+          "avatar": {
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 21"
+          },
+          "seat": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 29 && (!data.exists() || data.val() === newData.val())"
+          },
+          "team": {
+            ".validate": "newData.isString() && newData.val().matches(/^t[0-9]{1,2}$/) && (newData.val() === data.val() || !root.child('room/state/phase').exists() || root.child('room/state/phase').val() === 'lobby' || (auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true)"
+          },
+          "guest": {
+            ".validate": "newData.isBoolean()"
+          },
+          "online": {
+            ".validate": "newData.isBoolean()"
+          },
+          "joinedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      },
+      "boards": {
+        ".write": "auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true) || ((auth != null && root.child('room/config/selfMode').val() === true && root.child('room/host').val() === auth.uid) && !newData.exists())",
+        "$team": {
+          ".read": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team || (auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true))",
+          "$round": {
+            "assign": {
+              "$item": {
+                ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((root.child('room/state/phase').val() === 'fixed' && !$round.contains('f')) || (root.child('room/state/phase').val() === 'free' && $round.contains('f'))) && !data.parent().parent().parent().child($round.replace('f1', 'f').replace('f2', 'f').replace('f3', 'f')).child('submitted').exists() && (!data.parent().parent().child('holds').child($item).exists() || data.parent().parent().child('holds').child($item).val() === auth.uid)",
+                ".validate": "newData.hasChildren(['tray', 'at']) && newData.child('tray').isString() && newData.child('tray').val().matches(/^(tray-[0-9]|trash)$/) && newData.child('at').isNumber()"
+              }
+            },
+            "labels": {
+              "$tray": {
+                ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((root.child('room/state/phase').val() === 'fixed' && !$round.contains('f')) || (root.child('room/state/phase').val() === 'free' && $round.contains('f'))) && !data.parent().parent().parent().child($round.replace('f1', 'f').replace('f2', 'f').replace('f3', 'f')).child('submitted').exists()",
+                ".validate": "$tray.matches(/^tray-[0-9]$/) && newData.isString() && newData.val().length <= 20"
+              }
+            },
+            "holds": {
+              "$item": {
+                ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((root.child('room/state/phase').val() === 'fixed' && !$round.contains('f')) || (root.child('room/state/phase').val() === 'free' && $round.contains('f'))) && (!newData.exists() || (!data.parent().parent().parent().child($round.replace('f1', 'f').replace('f2', 'f').replace('f3', 'f')).child('submitted').exists() && newData.val() === auth.uid)) && (!data.exists() || data.val() === auth.uid)"
+              }
+            },
+            "cursors": {
+              "$uid": {
+                ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && $uid === auth.uid",
+                ".validate": "newData.child('x').isNumber() && newData.child('y').isNumber()"
+              }
+            },
+            "comment": {
+              ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((root.child('room/state/phase').val() === 'fixed' && !$round.contains('f')) || (root.child('room/state/phase').val() === 'free' && $round.contains('f')))",
+              ".validate": "newData.isString() && newData.val().length <= 300"
+            },
+            "submitted": {
+              ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((root.child('room/state/phase').val() === 'fixed' && !$round.contains('f')) || (root.child('room/state/phase').val() === 'free' && $round.contains('f')))",
+              ".validate": "newData.hasChildren(['by', 'at']) && newData.child('by').val() === auth.uid && newData.child('at').isNumber()"
+            },
+            "purpose": {
+              ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((root.child('room/state/phase').val() === 'fixed' && !$round.contains('f')) || (root.child('room/state/phase').val() === 'free' && $round.contains('f'))) && !data.parent().parent().child($round.replace('f1', 'f').replace('f2', 'f').replace('f3', 'f')).child('submitted').exists()",
+              ".validate": "newData.isString() && newData.val().length <= 120"
+            },
+            ".validate": "$round.matches(/^r[0-9]+(f[1-3]?)?$/)",
+            "primary": {
+              ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((root.child('room/state/phase').val() === 'fixed' && !$round.contains('f')) || (root.child('room/state/phase').val() === 'free' && $round.contains('f'))) && !data.parent().child('submitted').exists()",
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 3"
+            }
+          }
+        },
+        ".read": "auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true) || (auth != null && (root.child('room/state/phase').val() === 'fixedReveal' || root.child('room/state/phase').val() === 'freeReveal' || root.child('room/state/phase').val() === 'score'))"
+      },
+      "chats": {
+        ".write": "auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true) || ((auth != null && root.child('room/config/selfMode').val() === true && root.child('room/host').val() === auth.uid) && !newData.exists())",
+        "$team": {
+          ".read": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team",
+          "$msg": {
+            ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((!data.exists() && newData.child('uid').val() === auth.uid) || (data.child('uid').val() === auth.uid && !newData.exists()))",
+            ".validate": "newData.hasChildren(['uid', 'name', 'avatar', 'text', 'at']) && newData.child('text').isString() && newData.child('text').val().length >= 1 && newData.child('text').val().length <= 500 && newData.child('name').isString() && newData.child('name').val().length <= 20 && newData.child('avatar').isNumber() && newData.child('at').isNumber()"
+          }
+        }
+      },
+      "announce": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true)",
+        ".validate": "newData.hasChildren(['text', 'at']) && newData.child('text').isString() && newData.child('text').val().length <= 200 && newData.child('at').isNumber()"
+      },
+      "votes": {
+        ".write": "auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true) || ((auth != null && root.child('room/config/selfMode').val() === true && root.child('room/host').val() === auth.uid) && !newData.exists())",
+        "$round": {
+          ".read": "auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true) || (auth != null && root.child('room/state/phase').val() === 'score')",
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && auth.uid === $uid && root.child('room/state/phase').val() === 'freeReveal' && root.child('room/members').child(auth.uid).exists()",
+            ".validate": "newData.isString() && newData.val().matches(/^t[0-9]{1,2}$/)"
+          }
+        }
+      },
+      "host": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true) || (auth != null && root.child('room/config/selfMode').val() === true && root.child('room/members').child(auth.uid).exists() && ((newData.val() === auth.uid && (!data.exists() || root.child('room/members').child(data.val()).child('online').val() !== true)) || (data.val() === auth.uid && !newData.exists())))",
+        ".validate": "newData.isString()"
+      },
+      "status": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((auth.token.email === 'goonruntongue@gmail.com' && auth.token.email_verified === true) || root.child('admins').child(auth.uid).val() === true) || ((auth != null && root.child('room/config/selfMode').val() === true && root.child('room/host').val() === auth.uid) && !newData.exists())",
+        "$team": {
+          "$round": {
+            ".write": "auth != null && root.child('room/members').child(auth.uid).child('team').val() === $team && ((root.child('room/state/phase').val() === 'fixed' && !$round.contains('f')) || (root.child('room/state/phase').val() === 'free' && $round.contains('f')))",
+            ".validate": "newData.val() === true"
+          }
+        }
+      }
+    }
+  }
+}

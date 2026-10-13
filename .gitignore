@@ -8,3 +8,5 @@ Thumbs.db
 .claude/settings.local.json
 .wrangler/
 .firebase/
+dist-pin/
+dist-dx/

@@ -1,5 +1,6 @@
 // Every team's board for the current round, as stored in the database, and its answer check.
 // Read by the game master's panel (always) and by everyone once the results are shown.
+import { ROOM } from './edition';
 import { onValue, ref, set } from 'firebase/database';
 import { useEffect, useState } from 'react';
 import { PROBLEMS } from '../data/problems';
@@ -30,7 +31,7 @@ export function useBoards(round: Round | null, enabled: boolean, free = false): 
       return;
     }
     return onValue(
-      ref(db, 'room/boards'),
+      ref(db, `${ROOM}/boards`),
       (snap) => {
         const all = (snap.val() ?? {}) as Record<string, Record<string, BoardData>>;
         setBoards(Object.fromEntries(Object.entries(all).map(([team, rounds]) => [team, rounds?.[key] ?? {}])));
@@ -99,7 +100,7 @@ export function useVotes(round: Round | null, enabled: boolean): Record<string, 
       return;
     }
     return onValue(
-      ref(db, `room/votes/r${key}`),
+      ref(db, `${ROOM}/votes/r${key}`),
       (snap) => setVotes((snap.val() ?? {}) as Record<string, string>),
       () => setVotes({}),
     );
@@ -117,7 +118,7 @@ export function useMyVote(round: Round | null, uid: string): string {
       return;
     }
     return onValue(
-      ref(db, `room/votes/r${key}/${uid}`),
+      ref(db, `${ROOM}/votes/r${key}/${uid}`),
       (snap) => setVote(typeof snap.val() === 'string' ? (snap.val() as string) : ''),
       () => setVote(''),
     );
@@ -126,7 +127,7 @@ export function useMyVote(round: Round | null, uid: string): string {
 }
 
 export function castVote(round: Round, uid: string, teamId: string): Promise<void> {
-  return set(ref(db, `room/votes/r${round.round}/${uid}`), teamId);
+  return set(ref(db, `${ROOM}/votes/r${round.round}/${uid}`), teamId);
 }
 
 /** A team's second half: every purpose it stocked (index 0 = 目的1), and which one it presents first. */
@@ -149,7 +150,7 @@ export function useFreeTeams(round: Round | null, enabled: boolean): Record<stri
       return;
     }
     return onValue(
-      ref(db, 'room/boards'),
+      ref(db, `${ROOM}/boards`),
       (snap) => {
         const all = (snap.val() ?? {}) as Record<string, Record<string, BoardData & { primary?: number }>>;
         setTeams(

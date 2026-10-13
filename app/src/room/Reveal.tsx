@@ -10,7 +10,7 @@ import { create } from 'zustand';
 import { PROBLEMS } from '../data/problems';
 import { dealTeamBoard, TRAY_GLYPHS, useGame } from '../state/store';
 import { THEMES } from '../theme/themes';
-import { avatarThumb } from './avatars';
+import { Face } from './Face';
 import { castVote, checkBoard, layOutFree, slotUsed, useBoards, useFreeTeams, useMyVote, useVotes, type Answer, type BoardData, type FreeAnswer, type FreeTeam } from './boards';
 import { isFreeHalf, teamsOf, useCanRun, useSession, type Member, type Round } from './session';
 
@@ -177,7 +177,7 @@ function FreeSlots({ round, team }: { round: Round; team: FreeTeam }) {
   );
 }
 
-function TeamCard(props: { name: string; mates: Member[]; rank: number | null; focused: boolean; onFocus?: () => void; children: ReactNode; foot?: ReactNode }) {
+function TeamCard(props: { name: string; mates: [string, Member][]; rank: number | null; focused: boolean; onFocus?: () => void; children: ReactNode; foot?: ReactNode }) {
   const { name, mates, rank, focused, onFocus, children, foot } = props;
   const className = `rv-team${focused ? ' is-focus' : ''}`;
   const head = (
@@ -185,8 +185,8 @@ function TeamCard(props: { name: string; mates: Member[]; rank: number | null; f
       {rank !== null && <span className="rv-rank num">{rank}位</span>}
       <h3>{name}</h3>
       <span className="rv-faces">
-        {mates.map((m, i) => (
-          <img key={i} className="avatar-face" src={avatarThumb(m.avatar)} alt="" title={m.name} draggable={false} />
+        {mates.map(([id, m]) => (
+          <Face key={id} uid={id} avatar={m.avatar} title={m.name} />
         ))}
       </span>
     </header>
@@ -235,7 +235,7 @@ export function Reveal() {
       .map((team) => {
         const fixedBoard = fixedBoards[team.id] ?? {};
         const freeTeam = freeTeams[team.id];
-        const mates = Object.values(members).filter((m) => m.team === team.id).sort((a, b) => (a.joinedAt ?? 0) - (b.joinedAt ?? 0));
+        const mates = Object.entries(members).filter(([, m]) => m.team === team.id).sort(([, a], [, b]) => (a.joinedAt ?? 0) - (b.joinedAt ?? 0));
         const fixed = fixedBoard.assign || fixedBoard.submitted ? checkBoard(round, fixedBoard) : null;
         const correct = fixed?.grade.correct ?? 0;
         return {

@@ -13,6 +13,7 @@
 //
 // Two people reaching for the same block: the first hold written wins (the rules refuse the second),
 // and the loser's block springs back. Two people typing the same label: the last one to stop typing wins.
+import { ROOM } from './edition';
 import { onDisconnect, onValue, ref, remove, serverTimestamp, set, update } from 'firebase/database';
 import { remoteSend, yieldBlock } from '../game/input';
 import { blocks, dom, drag, remoteCursors, remoteHolds } from '../game/runtime';
@@ -111,8 +112,8 @@ interface RemoteAssign {
 
 /** `key` names the board within the team, `teamKey` its team-wide node: see boardKey() and teamKey() in session.ts. */
 export function startTeamSync(teamId: string, uid: string, key: string, teamKey: string): () => void {
-  const base = `room/boards/${teamId}/${key}`;
-  const teamBase = `room/boards/${teamId}/${teamKey}`;
+  const base = `${ROOM}/boards/${teamId}/${key}`;
+  const teamBase = `${ROOM}/boards/${teamId}/${teamKey}`;
   const at = (path: string) => ref(db, `${base}/${path}`);
   let remoteAssign: Record<string, RemoteAssign> = {};
   let remoteLabels: Record<string, string> = {};
@@ -150,7 +151,7 @@ export function startTeamSync(teamId: string, uid: string, key: string, teamKey:
   active = {
     base,
     teamBase,
-    statusPath: `room/status/${teamId}/${teamKey}`,
+    statusPath: `${ROOM}/status/${teamId}/${teamKey}`,
     uid,
     // This player typed in the box: send it once the typing pauses.
     touch: (field) => {

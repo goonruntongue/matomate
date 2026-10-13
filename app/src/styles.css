@@ -1791,3 +1791,9 @@ body.is-dragging .app.is-team .stage canvas { cursor: none !important; }
 .team-slot-tab small { font-size: 10px; color: var(--warning); }
 .team-slot-tab.is-on { border-color: var(--accent); color: var(--text-1); background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .admin-slot-title { margin: 8px 0 0; font-size: 12px; font-weight: 700; color: var(--accent); }
+
+/* Pin edition: a profile is just a nickname. */
+.profile.is-plain { grid-template-columns: 1fr; }
+
+/* The hidden attribute must win over our own display rules. */
+[hidden] { display: none !important; }

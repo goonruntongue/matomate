@@ -1,6 +1,9 @@
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import { EDITION } from './room/edition';
 import './styles.css';
+
+if (EDITION === 'dx') document.title = 'Mato mate DX（マトメイト DX）';
 
 const root = createRoot(document.getElementById('root')!);
 if (import.meta.env.DEV && new URLSearchParams(location.search).has('make-thumbs')) {

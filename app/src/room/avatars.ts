@@ -13,6 +13,9 @@ export function avatarThumb(n: number): string {
   return `./avatars/thumbs/avatar${n}.webp`;
 }
 
+/** Pin edition: the one model everybody uses (white; tinted per member in TeamAvatars.tsx). */
+export const PIN_URL = './avatars/avatar-pin.glb';
+
 export function randomAvatar(): number {
   return 1 + Math.floor(Math.random() * AVATAR_COUNT);
 }

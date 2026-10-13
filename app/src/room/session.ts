@@ -1,6 +1,7 @@
 // Who is signed in, and the room they are in: its settings, its members and their teams.
 // There is one room. It holds up to 30 participants; each one owns a numbered seat (0..29),
 // and the database rules refuse a 31st.
+import { ROOM } from './edition';
 import {
   GoogleAuthProvider,
   onAuthStateChanged,
@@ -239,7 +240,7 @@ export const useSession = create<SessionState>()((set_, get_) => {
 
   /** Presence: online while connected; the server marks the member offline when the connection drops. */
   function goOnline(uid: string) {
-    const online = ref(db, `room/members/${uid}/online`);
+    const online = ref(db, `${ROOM}/members/${uid}/online`);
     void onDisconnect(online)
       .set(false)
       .then(() => set(online, true))
@@ -248,8 +249,8 @@ export const useSession = create<SessionState>()((set_, get_) => {
 
   function watchRoom(user: User) {
     const offs = [
-      onValue(ref(db, 'room/config'), (snap) => set_({ config: { ...DEFAULT_CONFIG, ...(snap.val() ?? {}) } })),
-      onValue(ref(db, 'room/state'), (snap) => {
+      onValue(ref(db, `${ROOM}/config`), (snap) => set_({ config: { ...DEFAULT_CONFIG, ...(snap.val() ?? {}) } })),
+      onValue(ref(db, `${ROOM}/state`), (snap) => {
         const v = (snap.val() ?? {}) as Partial<Round> & { phase?: Phase; showModel?: boolean; focus?: string };
         const ok = typeof v.round === 'number' && typeof v.problemId === 'string' && typeof v.seed === 'number' && Array.isArray(v.sizes);
         set_({
@@ -259,14 +260,14 @@ export const useSession = create<SessionState>()((set_, get_) => {
         });
       }),
       onValue(ref(db, '.info/serverTimeOffset'), (snap) => set_({ clockOffset: Number(snap.val()) || 0 })),
-      onValue(ref(db, 'room/host'), (snap) => set_({ host: typeof snap.val() === 'string' ? (snap.val() as string) : '' })),
-      onValue(ref(db, 'room/status'), (snap) => set_({ status: (snap.val() ?? {}) as Record<string, Record<string, boolean>> })),
-      onValue(ref(db, 'room/announce'), (snap) => {
+      onValue(ref(db, `${ROOM}/host`), (snap) => set_({ host: typeof snap.val() === 'string' ? (snap.val() as string) : '' })),
+      onValue(ref(db, `${ROOM}/status`), (snap) => set_({ status: (snap.val() ?? {}) as Record<string, Record<string, boolean>> })),
+      onValue(ref(db, `${ROOM}/announce`), (snap) => {
         const v = snap.val() as Announcement | null;
         set_({ announcement: v && typeof v.text === 'string' && typeof v.at === 'number' ? v : null });
       }),
       onValue(
-        ref(db, 'room/members'),
+        ref(db, `${ROOM}/members`),
         (snap) => {
           const members = (snap.val() ?? {}) as Record<string, Member>;
           const mine = !!members[user.uid];
@@ -302,17 +303,17 @@ export const useSession = create<SessionState>()((set_, get_) => {
     if (!validName(name)) throw Object.assign(new Error('name'), { code: 'name-required' });
     const profile = { name: name.trim().slice(0, NAME_MAX), avatar };
     if (existing) {
-      await update(ref(db, `room/members/${uid}`), profile);
+      await update(ref(db, `${ROOM}/members/${uid}`), profile);
       return;
     }
     // Take the first free seat. If someone else takes it at the same moment the write is refused: try the next.
-    const seats = ((await get(ref(db, 'room/seats'))).val() ?? {}) as Record<string, string>;
+    const seats = ((await get(ref(db, `${ROOM}/seats`))).val() ?? {}) as Record<string, string>;
     const free = Array.from({ length: MAX_MEMBERS }, (_, i) => i).filter((i) => !seats[i]);
     if (!free.length) throw Object.assign(new Error('full'), { full: true });
     let lastError: unknown;
     for (const seat of free.slice(0, 5)) {
       try {
-        await update(ref(db, 'room'), {
+        await update(ref(db, ROOM), {
           [`seats/${seat}`]: uid,
           [`members/${uid}`]: { ...profile, seat, guest: user.isAnonymous, online: true, joinedAt: serverTimestamp() },
         });
@@ -332,9 +333,9 @@ export const useSession = create<SessionState>()((set_, get_) => {
     claimHost: () =>
       run(async () => {
         const user = get_().user;
-        if (user) await set(ref(db, 'room/host'), user.uid);
+        if (user) await set(ref(db, `${ROOM}/host`), user.uid);
       }),
-    releaseHost: () => run(async () => set(ref(db, 'room/host'), null)),
+    releaseHost: () => run(async () => set(ref(db, `${ROOM}/host`), null)),
     loaded: false,
     config: DEFAULT_CONFIG,
     phase: 'lobby',
@@ -378,19 +379,19 @@ export const useSession = create<SessionState>()((set_, get_) => {
         if (!user || !members[user.uid]) return;
         const count = Object.entries(members).filter(([uid, m]) => m.team === teamId && uid !== user.uid).length;
         if (count >= config.teamSize) throw Object.assign(new Error('team full'), { code: 'team-full' });
-        await set(ref(db, `room/members/${user.uid}/team`), teamId);
+        await set(ref(db, `${ROOM}/members/${user.uid}/team`), teamId);
       }),
     leave: async () => {
       const { user, members } = get_();
       const me = user && members[user.uid];
       if (!user || !me) return;
       wasMember = false;
-      await onDisconnect(ref(db, `room/members/${user.uid}/online`)).cancel().catch(() => undefined);
+      await onDisconnect(ref(db, `${ROOM}/members/${user.uid}/online`)).cancel().catch(() => undefined);
       // A host who leaves gives the seat up, so someone else can carry on.
-      if (get_().host === user.uid) await set(ref(db, 'room/host'), null).catch(() => undefined);
-      await update(ref(db, 'room'), { [`seats/${me.seat}`]: null, [`members/${user.uid}`]: null }).catch(() => undefined);
+      if (get_().host === user.uid) await set(ref(db, `${ROOM}/host`), null).catch(() => undefined);
+      await update(ref(db, ROOM), { [`seats/${me.seat}`]: null, [`members/${user.uid}`]: null }).catch(() => undefined);
     },
-    clearRoom: () => run(async () => update(ref(db, 'room'), { seats: null, members: null, host: null })),
+    clearRoom: () => run(async () => update(ref(db, ROOM), { seats: null, members: null, host: null })),
     startGame: () =>
       run(async () => {
         const { config, round: last } = get_();
@@ -400,7 +401,7 @@ export const useSession = create<SessionState>()((set_, get_) => {
         const chosen = fits.find((p) => p.id === config.problem);
         const pool = fits.filter((p) => p.id !== last?.problemId);
         const problem = chosen ?? (pool.length ? pool : fits)[Math.floor(Math.random() * (pool.length || fits.length))];
-        await update(ref(db, 'room'), {
+        await update(ref(db, ROOM), {
           state: { phase: 'fixed', round: (last?.round ?? 0) + 1, problemId: problem.id, seed: Math.floor(Math.random() * 2 ** 31), sizes, caps: true },
           boards: null,
           chats: null,
@@ -408,23 +409,23 @@ export const useSession = create<SessionState>()((set_, get_) => {
           status: null,
         });
       }),
-    showResults: () => run(async () => update(ref(db, 'room/state'), { phase: get_().phase === 'free' ? 'freeReveal' : 'fixedReveal', showModel: false, focus: '' })),
-    startFree: () => run(async () => update(ref(db, 'room/state'), { phase: 'free', showModel: false, focus: '' })),
-    showScore: () => run(async () => update(ref(db, 'room/state'), { phase: 'score', focus: '' })),
-    setReveal: (patch) => run(async () => update(ref(db, 'room/state'), patch)),
-    saveConfig: (patch) => run(async () => update(ref(db, 'room/config'), patch)),
+    showResults: () => run(async () => update(ref(db, `${ROOM}/state`), { phase: get_().phase === 'free' ? 'freeReveal' : 'fixedReveal', showModel: false, focus: '' })),
+    startFree: () => run(async () => update(ref(db, `${ROOM}/state`), { phase: 'free', showModel: false, focus: '' })),
+    showScore: () => run(async () => update(ref(db, `${ROOM}/state`), { phase: 'score', focus: '' })),
+    setReveal: (patch) => run(async () => update(ref(db, `${ROOM}/state`), patch)),
+    saveConfig: (patch) => run(async () => update(ref(db, `${ROOM}/config`), patch)),
     announce: (text) =>
       run(async () => {
         const body = text.trim().slice(0, 200);
-        if (body) await set(ref(db, 'room/announce'), { text: body, at: serverTimestamp() });
+        if (body) await set(ref(db, `${ROOM}/announce`), { text: body, at: serverTimestamp() });
       }),
-    moveMember: (uid, teamId) => run(async () => set(ref(db, `room/members/${uid}/team`), teamId || null)),
+    moveMember: (uid, teamId) => run(async () => set(ref(db, `${ROOM}/members/${uid}/team`), teamId || null)),
     kick: (uid) =>
       run(async () => {
         const seat = get_().members[uid]?.seat;
-        await update(ref(db, 'room'), { [`members/${uid}`]: null, ...(seat === undefined ? {} : { [`seats/${seat}`]: null }) });
+        await update(ref(db, ROOM), { [`members/${uid}`]: null, ...(seat === undefined ? {} : { [`seats/${seat}`]: null }) });
       }),
-    endGame: () => run(async () => set(ref(db, 'room/state/phase'), 'lobby')),
+    endGame: () => run(async () => set(ref(db, `${ROOM}/state/phase`), 'lobby')),
     clearMessages: () => set_({ notice: '', error: '' }),
   };
 });

@@ -4,7 +4,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { PROBLEMS } from '../data/problems';
 import { dealTeamBoard, TRASH_ID, TRAY_GLYPHS, useGame } from '../state/store';
 import { THEMES } from '../theme/themes';
-import { avatarThumb } from './avatars';
+import { Face } from './Face';
 import { slotUsed, useBoards, useFreeTeams, type BoardData } from './boards';
 import { ModelAnswer, useRevealUi } from './Reveal';
 import {
@@ -131,7 +131,7 @@ function MemberRow({ uid, member, teams, canMove }: { uid: string; member: Membe
   }
   return (
     <li className={`admin-member${member.online === false ? ' is-away' : ''}`}>
-      <img className="avatar-face" src={avatarThumb(member.avatar)} alt="" draggable={false} />
+      <Face uid={uid} avatar={member.avatar} />
       <span className="member-name">
         {member.name}
         {member.guest && <small>ゲスト</small>}

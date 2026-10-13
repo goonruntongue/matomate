@@ -32,12 +32,13 @@ function publicFiles(dir: string, root = dir): string[] {
  * public shell (manifest, icons). Character models are left out (≈0.9 MB each); the service
  * worker caches each one the first time it is shown.
  */
-function precacheManifest(): Plugin {
+function precacheManifest(mode: string): Plugin {
   return {
     name: 'matomate-precache',
     apply: 'build',
     generateBundle(_, bundle) {
-      const shell = publicFiles('public').filter((f) => f !== 'sw.js' && !f.startsWith('characters/') && !/^avatars\/[^/]+\.glb$/.test(f));
+      // Models are cached when first shown; the pin edition has no character pictures either (scripts/prune-dist.mjs).
+      const shell = publicFiles('public').filter((f) => f !== 'sw.js' && !f.startsWith('characters/') && !/^avatars\/[^/]+\.glb$/.test(f) && (mode === 'dx' || !f.startsWith('avatars/')));
       const files = ['./', ...Object.keys(bundle), ...shell];
       this.emitFile({ type: 'asset', fileName: 'precache.json', source: JSON.stringify({ files }, null, 1) });
     },
@@ -69,8 +70,8 @@ function avatarThumbs(): Plugin {
   };
 }
 
-export default defineConfig(({ command }) => ({
-  plugins: [react(), precacheManifest(), avatarThumbs()],
+export default defineConfig(({ command, mode }) => ({
+  plugins: [react(), precacheManifest(mode), avatarThumbs()],
   // Relative asset paths so the build works under any sub-path (GitHub Pages serves it at /label-drop/app/).
   base: './',
   // host: true listens on all interfaces (0.0.0.0), not just localhost, for same-LAN device testing.
