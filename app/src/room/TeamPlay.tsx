@@ -9,7 +9,7 @@ import { TRASH_ID, TRASH_MAX, useGame } from '../state/store';
 import { Icon } from '../ui/Header';
 import { avatarThumb } from './avatars';
 import { db } from './firebase';
-import { boardKey, isPlaying, teamsOf, useSession } from './session';
+import { boardKey, isPlaying, teamsOf, useHandIns, useSession } from './session';
 import { COMMENT_MAX, CURSOR_IDLE_MS, myPointer, PURPOSE_MAX, startTeamSync, useTeamBoard } from './teamSync';
 
 const CHAT_MAX = 500;
@@ -491,5 +491,69 @@ export function TeamTrash() {
       </b>
       <small>{full ? 'いっぱい' : '捨てる'}</small>
     </button>
+  );
+}
+
+/**
+ * Self mode, in the tray list of the host: which teams have handed in (never their answers), and the
+ * button that shows the results once every team has. If the host drops out, a teammate can take over here.
+ */
+export function HostBar() {
+  const uid = useSession((s) => s.user?.uid ?? '');
+  const selfMode = useSession((s) => s.config.selfMode);
+  const host = useSession((s) => s.host);
+  const members = useSession((s) => s.members);
+  const busy = useSession((s) => s.busy);
+  const { showResults, endGame, claimHost } = useSession.getState();
+  const { active, waiting, allIn } = useHandIns();
+  const [asking, setAsking] = useState(false);
+  if (!selfMode) return null;
+  const hostMember = host ? members[host] : undefined;
+  const hostGone = !host || !hostMember || hostMember.online === false;
+  if (host !== uid) {
+    if (!hostGone) return null;
+    return (
+      <section className="host-bar" aria-label="ホスト">
+        <p>ホストがいなくなりました。</p>
+        <button type="button" className="btn" disabled={busy} onClick={() => void claimHost()}>
+          ホストを引き継ぐ
+        </button>
+      </section>
+    );
+  }
+  return (
+    <section className={`host-bar${allIn ? ' is-ready' : ''}`} aria-label="ホストの操作">
+      <p>
+        <b>ホスト</b>：提出済み {active.length - waiting.length} / {active.length} チーム
+        {waiting.length > 0 && <small>（まだ：{waiting.map((t) => t.name).join('、')}）</small>}
+      </p>
+      {asking ? (
+        <div className="host-bar-actions">
+          <span>ゲームを終えて、全員をロビーへ戻しますか？</span>
+          <button type="button" className="btn" autoFocus onClick={() => setAsking(false)}>
+            やめる
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={() => {
+              setAsking(false);
+              void endGame();
+            }}
+          >
+            ロビーへ戻す
+          </button>
+        </div>
+      ) : (
+        <div className="host-bar-actions">
+          <button type="button" className="btn btn-primary" disabled={busy || !allIn} onClick={() => void showResults()}>
+            結果発表
+          </button>
+          <button type="button" className="btn" disabled={busy} onClick={() => setAsking(true)}>
+            ゲームを終える
+          </button>
+        </div>
+      )}
+    </section>
   );
 }

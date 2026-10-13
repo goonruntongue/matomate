@@ -52,7 +52,7 @@ interface TeamBoardState {
 }
 
 /** Set while a board is being synced: where it lives, and who this player is. */
-let active: { base: string; uid: string; touch(field: 'comment' | 'purpose'): void } | null = null;
+let active: { base: string; statusPath: string; uid: string; touch(field: 'comment' | 'purpose'): void } | null = null;
 
 export const useTeamBoard = create<TeamBoardState>()((set_, get_) => ({
   purpose: '',
@@ -69,17 +69,21 @@ export const useTeamBoard = create<TeamBoardState>()((set_, get_) => ({
   },
   submit: () => {
     if (!active) return;
-    const { base, uid } = active;
+    const { base, statusPath, uid } = active;
     set_({ error: '' });
     // The comment goes with it, in case the last keystrokes haven't been sent yet.
-    update(ref(db, base), { comment: get_().comment.trim(), purpose: get_().purpose.trim(), submitted: { by: uid, at: serverTimestamp() } }).catch(() =>
-      set_({ error: '提出できませんでした。もう一度お試しください。' }),
-    );
+    // room/status only says "this team has handed in": that much everyone may know (the host needs it).
+    update(ref(db), {
+      [`${base}/comment`]: get_().comment.trim(),
+      [`${base}/purpose`]: get_().purpose.trim(),
+      [`${base}/submitted`]: { by: uid, at: serverTimestamp() },
+      [statusPath]: true,
+    }).catch(() => set_({ error: '提出できませんでした。もう一度お試しください。' }));
   },
   takeBack: () => {
     if (!active) return;
     set_({ error: '' });
-    remove(ref(db, `${active.base}/submitted`)).catch(() => set_({ error: '取り消せませんでした。結果発表が始まっているかもしれません。' }));
+    update(ref(db), { [`${active.base}/submitted`]: null, [active.statusPath]: null }).catch(() => set_({ error: '取り消せませんでした。結果発表が始まっているかもしれません。' }));
   },
 }));
 
@@ -126,6 +130,7 @@ export function startTeamSync(teamId: string, uid: string, key: string): () => v
   useTeamBoard.setState({ comment: '', purpose: '', submitted: null, error: '' });
   active = {
     base,
+    statusPath: `room/status/${teamId}/${key}`,
     uid,
     // This player typed in the box: send it once the typing pauses.
     touch: (field) => {

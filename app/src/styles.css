@@ -1772,3 +1772,14 @@ body.is-dragging .app.is-team .stage canvas { cursor: none !important; }
 .team-examples li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line-soft); border-radius: var(--r-ctl); background: color-mix(in srgb, var(--bg-0) 45%, transparent); font-size: 12px; line-height: 1.6; }
 .team-examples li span { flex: 1; }
 .team-examples .btn { flex: none; white-space: nowrap; padding: 6px 10px; font-size: 12px; }
+
+/* ---------- Self mode: the host ---------- */
+.self-mode { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--accent); border-radius: var(--r-card); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.self-mode-text { margin: 0; font-size: 14px; line-height: 1.6; }
+.host-bar { display: grid; gap: 8px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: var(--r-card); font-size: 13px; }
+.host-bar.is-ready { border-style: solid; border-color: var(--success); background: color-mix(in srgb, var(--success) 12%, transparent); }
+.host-bar p { margin: 0; line-height: 1.6; }
+.host-bar small { color: var(--text-2); }
+.host-bar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.host-bar-actions .btn { min-height: 40px; }
+.admin-link { margin: 0 4px; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }

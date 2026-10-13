@@ -6,7 +6,7 @@ import { levelDef } from '../game/levels';
 import { labelIssues } from '../hints/labelRules';
 import { TRASH_ID, TRASH_MAX, TRAY_GLYPHS, useGame, type Tray } from '../state/store';
 import { THEMES } from '../theme/themes';
-import { TeamPurpose, TeamSubmit } from '../room/TeamPlay';
+import { HostBar, TeamPurpose, TeamSubmit } from '../room/TeamPlay';
 
 export function Inventory() {
   const trays = useGame((s) => s.trays);
@@ -37,6 +37,7 @@ export function Inventory() {
           </p>
         </div>
       </div>
+      {team && <HostBar />}
       {free && <TeamPurpose />}
       <SubmitBar />
       {!team && <AssistBar />}

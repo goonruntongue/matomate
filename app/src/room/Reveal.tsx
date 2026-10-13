@@ -12,7 +12,7 @@ import { dealTeamBoard, TRAY_GLYPHS, useGame } from '../state/store';
 import { THEMES } from '../theme/themes';
 import { avatarThumb } from './avatars';
 import { castVote, checkBoard, layOutFree, useBoards, useMyVote, useVotes, type Answer, type BoardData, type FreeAnswer } from './boards';
-import { isFreeHalf, teamsOf, useSession, type Member, type Round } from './session';
+import { isFreeHalf, teamsOf, useCanRun, useSession, type Member, type Round } from './session';
 
 /** The game master flips between this screen and the control panel. */
 export const useRevealUi = create<{ panelOpen: boolean; setPanelOpen(open: boolean): void }>()((set_) => ({
@@ -189,7 +189,9 @@ export function Reveal() {
   const isAdmin = useSession((s) => s.isAdmin);
   const uid = useSession((s) => s.user?.uid ?? '');
   const busy = useSession((s) => s.busy);
-  const { setReveal, startGame, startFree, showScore } = useSession.getState();
+  const { setReveal, startGame, startFree, showScore, endGame } = useSession.getState();
+  // The game master, or (self mode) the host: a participant who also runs the game.
+  const canRun = useCanRun();
   const free = isFreeHalf(phase);
   const scoring = phase === 'score';
   const fixedBoards = useBoards(round, true, false);
@@ -250,15 +252,15 @@ export function Reveal() {
             {free ? '同じブロックを、チームごとに決めた目的で分け直しました。目的が変わると、分け方と名前はどう変わったでしょう？' : `${problem.brief.user}が、${problem.brief.scene}、${problem.brief.goal}`}
           </p>
         </div>
-        {isAdmin && (
-          <div className="rv-admin" aria-label="ゲームマスターの操作">
+        {canRun && (
+          <div className="rv-admin" aria-label="進行の操作">
             {phase === 'fixedReveal' && (
               <label className="admin-toggle">
                 <input type="checkbox" checked={reveal.showModel} disabled={busy} onChange={(e) => void setReveal({ showModel: e.target.checked })} />
                 <span>模範の分け方を見せる</span>
               </label>
             )}
-            {phase === 'freeReveal' && (
+            {phase === 'freeReveal' && isAdmin && (
               <span className="rv-voted num">
                 投票済み {voted} / {voters}人
               </span>
@@ -288,13 +290,19 @@ export function Reveal() {
                 次のゲームを始める
               </button>
             )}
-            <button type="button" className="btn" onClick={() => useRevealUi.getState().setPanelOpen(true)}>
-              管理パネル
-            </button>
+            {isAdmin ? (
+              <button type="button" className="btn" onClick={() => useRevealUi.getState().setPanelOpen(true)}>
+                管理パネル
+              </button>
+            ) : (
+              <button type="button" className="btn" disabled={busy} onClick={() => void endGame()}>
+                ロビーへ戻す
+              </button>
+            )}
           </div>
         )}
       </header>
-      {isAdmin && !scoring && <p className="rv-hint">チーム名を押すと、全員の画面でそのチームが目立ちます。この画面は、全員に同じものが見えています。</p>}
+      {canRun && !scoring && <p className="rv-hint">チーム名を押すと、全員の画面でそのチームが目立ちます。この画面は、全員に同じものが見えています。</p>}
       {phase === 'freeReveal' && !isAdmin && (
         <p className="rv-vote-note" role="status">
           {isMember
@@ -312,7 +320,7 @@ export function Reveal() {
             mates={row.mates}
             rank={row.rank}
             focused={reveal.focus === row.team.id}
-            onFocus={isAdmin && !scoring ? () => void setReveal({ focus: reveal.focus === row.team.id ? '' : row.team.id }) : undefined}
+            onFocus={canRun && !scoring ? () => void setReveal({ focus: reveal.focus === row.team.id ? '' : row.team.id }) : undefined}
             foot={
               phase === 'freeReveal' && !isAdmin && isMember ? (
                 <button type="button" className={`rv-heart${myVote === row.team.id ? ' is-on' : ''}`} aria-pressed={myVote === row.team.id} onClick={() => void castVote(round, uid, row.team.id).catch(() => undefined)}>

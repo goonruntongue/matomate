@@ -3,7 +3,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { SafeBoundary } from '../ui/SafeBoundary';
 import { Admin } from './Admin';
 import { AVATAR_COUNT, avatarThumb, randomAvatar } from './avatars';
-import { MAX_MEMBERS, NAME_MAX, teamsOf, useSession, validName, type Member } from './session';
+import { BLOCK_SETS, blockSetOf, dealableProblems, MAX_MEMBERS, NAME_MAX, teamsOf, useSession, validName, type Member } from './session';
 
 const AvatarViewer = lazy(() => import('./AvatarViewer'));
 
@@ -155,6 +155,88 @@ function MemberChip({ member, me }: { member: Member; me: boolean }) {
   );
 }
 
+/**
+ * Self mode (when the game master allows it): one participant is the host and runs the game.
+ * Anyone in the room can take the host's seat while it is free, or after the host has dropped out.
+ */
+function SelfMode({ me }: { me: Member | undefined }) {
+  const uid = useSession((s) => s.user?.uid ?? '');
+  const config = useSession((s) => s.config);
+  const members = useSession((s) => s.members);
+  const host = useSession((s) => s.host);
+  const phase = useSession((s) => s.phase);
+  const busy = useSession((s) => s.busy);
+  const { claimHost, releaseHost, startGame, saveConfig } = useSession.getState();
+  if (!config.selfMode || !me) return null;
+  const hostMember = host ? members[host] : undefined;
+  const hostGone = !!host && (!hostMember || hostMember.online === false);
+  const amHost = host === uid;
+  const anyTeam = Object.values(members).some((m) => m.team);
+  const set = blockSetOf(config.blockSet);
+  const problems = dealableProblems();
+  return (
+    <section className="self-mode" aria-label="セルフモード">
+      <p className="kicker">SELF MODE</p>
+      {amHost ? (
+        <>
+          <p className="self-mode-text">
+            <b>あなたがホストです。</b>全員がチームに入ったら、ゲームを始めてください。
+          </p>
+          {phase === 'lobby' && (
+            <div className="admin-grid">
+              <label className="admin-field">
+                <span>ブロックと箱</span>
+                <select value={set.id} disabled={busy} onChange={(e) => void saveConfig({ blockSet: e.target.value })}>
+                  {BLOCK_SETS.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      ブロック{b.blocks}個・箱{b.trays}つ（1箱{b.each}個）
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="admin-field">
+                <span>お題</span>
+                <select value={problems.some((p) => p.id === config.problem) ? config.problem : 'random'} disabled={busy} onChange={(e) => void saveConfig({ problem: e.target.value })}>
+                  <option value="random">おまかせ（ランダム）</option>
+                  {problems.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+          <div className="entry-actions is-start">
+            {phase === 'lobby' && (
+              <button type="button" className="btn btn-primary" disabled={busy || !anyTeam || !me.team} onClick={() => void startGame()}>
+                ゲームを始める
+              </button>
+            )}
+            <button type="button" className="btn" disabled={busy} onClick={() => void releaseHost()}>
+              ホストをやめる
+            </button>
+          </div>
+          {phase === 'lobby' && !me.team && <p className="entry-note">ホストも、先にチームに入ってください。</p>}
+        </>
+      ) : host && !hostGone ? (
+        <p className="self-mode-text">
+          ホストは <b>{hostMember?.name}</b> さんです。ホストがゲームを進めます。
+        </p>
+      ) : (
+        <>
+          <p className="self-mode-text">{hostGone ? 'ホストがいなくなりました。だれかが引き継いでください。' : 'まだホストがいません。ゲームを進める人を1人決めてください。'}</p>
+          <div className="entry-actions is-start">
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void claimHost()}>
+              {hostGone ? 'ホストを引き継ぐ' : 'ホストになる'}
+            </button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 function Lobby() {
   const user = useSession((s) => s.user)!;
   const config = useSession((s) => s.config);
@@ -194,6 +276,7 @@ function Lobby() {
         </span>
       </div>
       <Messages />
+      <SelfMode me={me} />
       <div className="team-grid">
         {teams.map((team) => {
           const inTeam = list.filter(([, m]) => m.team === team.id);

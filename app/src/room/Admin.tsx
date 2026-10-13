@@ -158,7 +158,8 @@ export function Admin() {
   const round = useSession((s) => s.round);
   const busy = useSession((s) => s.busy);
   const error = useSession((s) => s.error);
-  const { saveConfig, startGame, showResults, startFree, endGame, clearRoom, announce, signOut } = useSession.getState();
+  const { saveConfig, startGame, showResults, startFree, endGame, clearRoom, announce, signOut, releaseHost } = useSession.getState();
+  const host = useSession((s) => s.host);
   const playing = phase !== 'lobby';
   const sorting = isPlaying(phase);
   const boards = useBoards(round, playing, isFreeHalf(phase));
@@ -413,7 +414,25 @@ export function Admin() {
         <div className="admin-toggles">
           <Toggle label="点数をつける" note="正解1つ・ハート1つを1点として数えます" value={config.points} disabled={busy} onChange={(points) => void saveConfig({ points })} />
           <Toggle label="順位をつける" value={config.ranking} disabled={busy || !config.points} onChange={(ranking) => void saveConfig({ ranking })} />
+          <Toggle
+            label="セルフモードを許可する"
+            note="参加者の1人が「ホスト」になり、管理者なしでゲームを進められます"
+            value={config.selfMode}
+            disabled={busy}
+            onChange={(selfMode) => void saveConfig({ selfMode })}
+          />
         </div>
+        {config.selfMode && (
+          <p className="entry-note">
+            いまのホスト：{host ? (members[host]?.name ?? '（退室した人）') : 'いません'}
+            {host && (
+              <button type="button" className="admin-link" disabled={busy} onClick={() => void releaseHost()}>
+                ホストを外す
+              </button>
+            )}
+            。ホストは、ゲームの開始・結果発表・後半の開始・お題とブロックの選択ができます。ほかのチームの途中の答えは見えません。
+          </p>
+        )}
         <details className="admin-names">
           <summary>チーム名を変える</summary>
           <div className="admin-grid">

@@ -48,6 +48,11 @@ export interface RoomConfig {
   ranking: boolean;
   /** Purposes a team may stock in the second half. */
   slots: number;
+  /**
+   * Self mode: a participant may become the host and run the game without the game master
+   * (start, reveal, second half, score). Off unless the game master allows it.
+   */
+  selfMode: boolean;
 }
 
 /** Blocks, boxes and how many each box takes. Problems hold 5 groups of 6 words, which bounds these. */
@@ -67,7 +72,7 @@ export function blockSetOf(id: string) {
 export const MAX_TEAMS = 10;
 export const MAX_TEAM_SIZE = 10;
 
-export const DEFAULT_CONFIG: RoomConfig = { teamCount: 5, teamSize: 4, blockSet: '9-3', problem: 'random', points: true, ranking: true, slots: 1 };
+export const DEFAULT_CONFIG: RoomConfig = { teamCount: 5, teamSize: 4, blockSet: '9-3', problem: 'random', points: true, ranking: true, slots: 1, selfMode: false };
 
 /** Problems the game master can deal: the ones written for the team game (they can be sorted for several purposes). */
 export function dealableProblems() {
@@ -138,6 +143,13 @@ interface SessionState {
   /** undefined until Firebase has answered whether someone is signed in. */
   user: User | null | undefined;
   isAdmin: boolean;
+  /** Self mode: uid of the participant who is running the game ('' = nobody). */
+  host: string;
+  /** Teams that have handed in, by team id then board key (see boardKey). Everyone can read this; not the answers. */
+  status: Record<string, Record<string, boolean>>;
+  /** Self mode: take the host's seat (when it is free, or the host has dropped out), or give it up. */
+  claimHost: () => Promise<void>;
+  releaseHost: () => Promise<void>;
   /** False until the first copy of the room has arrived. */
   loaded: boolean;
   config: RoomConfig;
@@ -233,6 +245,8 @@ export const useSession = create<SessionState>()((set_, get_) => {
         });
       }),
       onValue(ref(db, '.info/serverTimeOffset'), (snap) => set_({ clockOffset: Number(snap.val()) || 0 })),
+      onValue(ref(db, 'room/host'), (snap) => set_({ host: typeof snap.val() === 'string' ? (snap.val() as string) : '' })),
+      onValue(ref(db, 'room/status'), (snap) => set_({ status: (snap.val() ?? {}) as Record<string, Record<string, boolean>> })),
       onValue(ref(db, 'room/announce'), (snap) => {
         const v = snap.val() as Announcement | null;
         set_({ announcement: v && typeof v.text === 'string' && typeof v.at === 'number' ? v : null });
@@ -264,7 +278,7 @@ export const useSession = create<SessionState>()((set_, get_) => {
     stopRoom?.();
     stopRoom = null;
     wasMember = false;
-    set_({ user, isAdmin: !!user && user.email === ADMIN_EMAIL && user.emailVerified, loaded: false, members: {}, phase: 'lobby', round: null, reveal: { showModel: false, focus: '' }, announcement: null });
+    set_({ user, isAdmin: !!user && user.email === ADMIN_EMAIL && user.emailVerified, loaded: false, host: '', status: {}, members: {}, phase: 'lobby', round: null, reveal: { showModel: false, focus: '' }, announcement: null });
     if (user) stopRoom = watchRoom(user);
   });
 
@@ -299,6 +313,14 @@ export const useSession = create<SessionState>()((set_, get_) => {
   return {
     user: undefined,
     isAdmin: false,
+    host: '',
+    status: {},
+    claimHost: () =>
+      run(async () => {
+        const user = get_().user;
+        if (user) await set(ref(db, 'room/host'), user.uid);
+      }),
+    releaseHost: () => run(async () => set(ref(db, 'room/host'), null)),
     loaded: false,
     config: DEFAULT_CONFIG,
     phase: 'lobby',
@@ -350,9 +372,11 @@ export const useSession = create<SessionState>()((set_, get_) => {
       if (!user || !me) return;
       wasMember = false;
       await onDisconnect(ref(db, `room/members/${user.uid}/online`)).cancel().catch(() => undefined);
+      // A host who leaves gives the seat up, so someone else can carry on.
+      if (get_().host === user.uid) await set(ref(db, 'room/host'), null).catch(() => undefined);
       await update(ref(db, 'room'), { [`seats/${me.seat}`]: null, [`members/${user.uid}`]: null }).catch(() => undefined);
     },
-    clearRoom: () => run(async () => update(ref(db, 'room'), { seats: null, members: null })),
+    clearRoom: () => run(async () => update(ref(db, 'room'), { seats: null, members: null, host: null })),
     startGame: () =>
       run(async () => {
         const { config, round: last } = get_();
@@ -367,6 +391,7 @@ export const useSession = create<SessionState>()((set_, get_) => {
           boards: null,
           chats: null,
           votes: null,
+          status: null,
         });
       }),
     showResults: () => run(async () => update(ref(db, 'room/state'), { phase: get_().phase === 'free' ? 'freeReveal' : 'fixedReveal', showModel: false, focus: '' })),
@@ -389,3 +414,21 @@ export const useSession = create<SessionState>()((set_, get_) => {
     clearMessages: () => set_({ notice: '', error: '' }),
   };
 });
+
+/** The person running the game right now: the game master, or (self mode) the host. */
+export function useCanRun(): boolean {
+  return useSession((s) => s.isAdmin || (s.config.selfMode && !!s.user && s.host === s.user.uid));
+}
+
+/** Teams with someone in them, and which of those have handed in for the current phase. */
+export function useHandIns(): { active: Team[]; waiting: Team[]; allIn: boolean } {
+  const config = useSession((s) => s.config);
+  const members = useSession((s) => s.members);
+  const status = useSession((s) => s.status);
+  const round = useSession((s) => s.round);
+  const phase = useSession((s) => s.phase);
+  const key = round ? boardKey(round.round, phase === 'free') : '';
+  const active = teamsOf(config).filter((t) => Object.values(members).some((m) => m.team === t.id));
+  const waiting = active.filter((t) => !status[t.id]?.[key]);
+  return { active, waiting, allIn: isPlaying(phase) && active.length > 0 && waiting.length === 0 };
+}
