@@ -236,7 +236,7 @@ export function startTeamSync(teamId: string, uid: string, round: number): () =>
     if (show && rect) {
       const x = Math.round(((myPointer.x - rect.left) / Math.max(1, rect.width)) * 1000) / 1000;
       const y = Math.round(((myPointer.y - rect.top) / Math.max(1, rect.height)) * 1000) / 1000;
-      const held = drag.active && drag.moved && drag.id ? drag.id : null;
+      const held = drag.active && drag.id ? drag.id : null;
       next = JSON.stringify(held ? { x, y, h: held } : { x, y });
     }
     if (next !== sentCursor) {

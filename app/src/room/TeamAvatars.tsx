@@ -63,7 +63,7 @@ function Actor({ uid, member, isMe, slot }: { uid: string; member: Member; isMe:
         const rect = state.gl.domElement.getBoundingClientRect();
         fx = (myPointer.x - rect.left) / Math.max(1, rect.width);
         fy = (myPointer.y - rect.top) / Math.max(1, rect.height);
-        carrying = drag.active && drag.moved;
+        carrying = drag.active; // from the moment a block is pressed
       }
     } else {
       const c = remoteCursors.get(uid);
@@ -77,6 +77,7 @@ function Actor({ uid, member, isMe, slot }: { uid: string; member: Member; isMe:
 
     let height: number;
     let yaw = 0;
+    let spinning = false;
     let lean = 0;
     let roll = 0;
     let follow: number;
@@ -84,7 +85,9 @@ function Actor({ uid, member, isMe, slot }: { uid: string; member: Member; isMe:
       height = POINT_H;
       // Feet just above the pointer: the carried block sits under the avatar and stays readable.
       hit.y += 0.28 + (still ? 0 : Math.sin(t * 5) * 0.02);
-      lean = carrying ? 0.28 : 0.08;
+      // Holding a block: turn round to face it (back to the camera) and lean into it, like carrying it.
+      yaw = carrying ? Math.PI : 0;
+      lean = carrying ? -0.28 : 0.08;
       roll = carrying && !still ? Math.sin(t * 9) * 0.05 : 0;
       follow = isMe ? 30 : 12;
     } else {
@@ -104,6 +107,7 @@ function Actor({ uid, member, isMe, slot }: { uid: string; member: Member; isMe:
         if (c > 6 && c < 7) {
           const u = c - 6;
           yaw = (u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2) * Math.PI * 2; // one full turn
+          spinning = true;
         }
       }
       follow = 6;
@@ -116,7 +120,9 @@ function Actor({ uid, member, isMe, slot }: { uid: string; member: Member; isMe:
     }
     g.position.lerp(hit, ease(follow));
     g.scale.setScalar(THREE.MathUtils.lerp(g.scale.x, height, ease(10)));
-    inner.rotation.set(THREE.MathUtils.lerp(inner.rotation.x, lean, ease(10)), yaw, roll);
+    // The idle spin follows its own curve; every other turn (to the block and back) is eased.
+    const from = inner.rotation.y > Math.PI * 1.5 ? inner.rotation.y - Math.PI * 2 : inner.rotation.y;
+    inner.rotation.set(THREE.MathUtils.lerp(inner.rotation.x, lean, ease(10)), spinning ? yaw : THREE.MathUtils.lerp(from, yaw, ease(12)), roll);
     // This player's own avatar needs no name while it is the pointer.
     if (label.current) label.current.style.display = isMe && pointing ? 'none' : '';
   });
